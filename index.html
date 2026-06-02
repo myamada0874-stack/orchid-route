@@ -8351,7 +8351,7 @@ async function loadSampleData(region){
   region = region || 'tokyo';
   // 届け日はすべて6/1で統一
   const year = new Date().getFullYear();
-  const datePool = [`${year}/06/01`];
+  const datePool = [`${year}/06/02`];
 
   // 画像対象(hasPhoto): true=商品撮影画像あり/お客様に画像送信対象
   // 自社配送: 8件中 5件にhasPhoto / 宅配: 3件中 2件にhasPhoto (Tokyo)
@@ -8475,15 +8475,15 @@ async function loadSampleData(region){
   alert(
     `✓ サンプルデータ${samples.length}件を読み込みました (${regionLabel}エリア)\n`+
     `\n【配送区分】\n`+
-    `  ・自社配送: ${selfCount}件 (届け日 2026/06/01)\n`+
-    `  ・宅配出荷: ${carrierCount}件 (出荷日 ${shipDateSample} → 届け日 2026/06/01)\n`+
+    `  ・自社配送: ${selfCount}件 (届け日 2026/06/02)\n`+
+    `  ・宅配出荷: ${carrierCount}件 (出荷日 ${shipDateSample} → 届け日 2026/06/02)\n`+
     `\n【画像送信対象 (📸 撮影画像あり)】\n`+
     `  ・合計: ${photoTotal}件 / ${samples.length}件\n`+
     `    - 自社配送のうち画像あり: ${photoSelfCount}件 (届け日当日 朝7時送信予定)\n`+
     `    - 宅配のうち画像あり: ${photoCarrierCount}件 (出荷日当日 朝7時送信予定)\n`+
     `\n出発拠点も自動切替済。\n`+
     `📋「配達を組む」タブで「🚚 ルート最適化を実行」を押してください。\n`+
-    `🚚 自社配達タブの日付ピッカーで 2026-06-01 を選ぶと自社配送先が表示されます。\n`+
+    `🚚 自社配達タブの日付ピッカーで 2026-06-02 を選ぶと自社配送先が表示されます。\n`+
     `📨 画像送信タブで日付を切り替えると、自社=届け日 / 宅配=出荷日 で対象を確認できます。`
   );
 }
