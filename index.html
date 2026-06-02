@@ -1768,7 +1768,11 @@ async function saveBatchReceipts(){
   }
 
   // 履歴保存
-  if(!isDriverMode) saveHistory(true);
+  if(!isDriverMode){
+    saveHistory(true);
+    // ★ IndexedDBに永続化(ブラウザ更新で消えないように)
+    saveStateIDB().catch(e => console.warn('IndexedDB保存失敗:', e));
+  }
 
   btn.textContent = `✓ ${successCount}件保存しました`;
   setTimeout(()=>{
@@ -1920,8 +1924,16 @@ let syncLastFetched = null;
 
 function startSyncPolling(){
   stopSyncPolling();
-  const syncEnabled = document.getElementById('syncEnabled')?.checked;
-  const workerUrl = (document.getElementById('workerUrl')?.value||'').trim();
+  // 設定階層: DOM → localStorage → ハードコード
+  let syncEnabled = document.getElementById('syncEnabled')?.checked;
+  let workerUrl = (document.getElementById('workerUrl')?.value||'').trim();
+  try{
+    const s = JSON.parse(localStorage.getItem('settings')||'{}');
+    if(syncEnabled === undefined || syncEnabled === null) syncEnabled = s.syncEnabled;
+    if(!workerUrl) workerUrl = (s.workerUrl||'').trim();
+  }catch(e){}
+  if(syncEnabled === undefined || syncEnabled === null) syncEnabled = DEFAULT_SYNC_ENABLED;
+  if(!workerUrl) workerUrl = DEFAULT_SYNC_WORKER_URL;
   if(!syncEnabled || !workerUrl || !lastResults) return;
   const interval = (parseInt(document.getElementById('syncPollInterval')?.value)||15)*1000;
   // 即座に1回 → 以降は定期実行
@@ -1935,8 +1947,15 @@ function stopSyncPolling(){
 
 async function pollSyncOnce(){
   if(!lastResults) return;
-  const workerUrl = (document.getElementById('workerUrl')?.value||'').trim();
-  const authToken = (document.getElementById('mailAuthToken')?.value||'').trim();
+  let workerUrl = (document.getElementById('workerUrl')?.value||'').trim();
+  let authToken = (document.getElementById('mailAuthToken')?.value||'').trim();
+  // 階層フォールバック
+  try{
+    const s = JSON.parse(localStorage.getItem('settings')||'{}');
+    if(!workerUrl) workerUrl = (s.workerUrl||'').trim();
+    if(!authToken) authToken = (s.mailAuthToken||'').trim();
+  }catch(e){}
+  if(!workerUrl) workerUrl = DEFAULT_SYNC_WORKER_URL;
   if(!workerUrl) return;
   // アクティブな車両の routeId 一覧を生成 (今日の自社配達のみ)
   const targetDate = getSelfFilterDate(); // YYYY/MM/DD
@@ -2910,6 +2929,11 @@ window.addEventListener('DOMContentLoaded', async ()=>{
 //============================================
 let driverData = null; // {veh, dep, st[], date, ret}
 
+// ★ 同期機能のハードコード設定 (ゼロ設定でスマホが動くようにする)
+// ユーザー設定が空の場合のフォールバック値
+const DEFAULT_SYNC_WORKER_URL = 'https://artgreen-orchid-mailer.m-yamada0874.workers.dev';
+const DEFAULT_SYNC_ENABLED = true; // 既定で同期有効
+
 // ドライバー作業状態をlocalStorageに保存するためのキー (日付+車両名でルート単位)
 function getDriverStateKey(){
   if(!driverData) return null;
@@ -2948,30 +2972,39 @@ function saveDriverState(){
 }
 
 // Cloudflare KVに状態をアップロード (非同期)
-// DOM要素が無い/空の場合は localStorage 設定にフォールバック
+// 設定階層: DOM → localStorage → ハードコード値
 async function uploadDriverStateToKV(routeId, payload){
   let syncEnabled = document.getElementById('syncEnabled')?.checked;
   let workerUrl = (document.getElementById('workerUrl')?.value||'').trim();
   let authToken = (document.getElementById('mailAuthToken')?.value||'').trim();
-  // localStorageフォールバック (driver-modeでDOMが見えない/空のとき)
-  if(!workerUrl || syncEnabled === undefined){
-    try{
-      const s = JSON.parse(localStorage.getItem('settings')||'{}');
-      if(syncEnabled === undefined) syncEnabled = !!s.syncEnabled;
-      if(!workerUrl) workerUrl = (s.workerUrl||'').trim();
-      if(!authToken) authToken = (s.mailAuthToken||'').trim();
-    }catch(e){}
-  }
+  // 階層1: localStorageフォールバック
+  try{
+    const s = JSON.parse(localStorage.getItem('settings')||'{}');
+    if(syncEnabled === undefined || syncEnabled === null) syncEnabled = s.syncEnabled;
+    if(!workerUrl) workerUrl = (s.workerUrl||'').trim();
+    if(!authToken) authToken = (s.mailAuthToken||'').trim();
+  }catch(e){}
+  // 階層2: ハードコード値(これでゼロ設定でも動く)
+  if(syncEnabled === undefined || syncEnabled === null) syncEnabled = DEFAULT_SYNC_ENABLED;
+  if(!workerUrl) workerUrl = DEFAULT_SYNC_WORKER_URL;
   if(!syncEnabled || !workerUrl) return;
   const url = `${workerUrl.replace(/\/$/,'')}/sync?routeId=${encodeURIComponent(routeId)}`;
   const headers = {'Content-Type':'application/json'};
   if(authToken) headers['X-Auth-Token'] = authToken;
-  const res = await fetch(url, {method:'POST', headers, body: payload});
-  if(!res.ok){
-    throw new Error(`HTTP ${res.status}`);
-  }
-  if(document.body.classList.contains('driver-mode')){
-    showDriverToast('☁ 同期完了');
+  try{
+    const res = await fetch(url, {method:'POST', headers, body: payload});
+    if(!res.ok){
+      const errText = await res.text();
+      console.error(`KV同期失敗: HTTP ${res.status} - ${errText.substring(0,200)}`);
+      throw new Error(`HTTP ${res.status}`);
+    }
+    console.log(`✓ KV同期成功: ${routeId}`);
+    if(document.body.classList.contains('driver-mode')){
+      showDriverToast('☁ 同期完了');
+    }
+  }catch(e){
+    console.error('KV同期 fetch エラー:', e);
+    throw e;
   }
 }
 
@@ -7490,13 +7523,17 @@ async function saveReceipt(){
   if(isDriverMode){
     saveDriverState();
   }
+  // ★ 管理者モード: ステータス・サインをIndexedDBに即時永続化(ブラウザ更新で消えないように)
+  if(!isDriverMode){
+    saveStateIDB().catch(e => console.warn('IndexedDB保存失敗:', e));
+  }
   let pdfError = null;
   try{
     const pdfBlob = await generateReceiptPDF();
     await saveReceiptFile(stop, pdfBlob);
     if(!isDriverMode){
       saveHistory(true).then(ok => {
-        if(ok) console.log('履歴を更新しました');
+        if(ok) console.log('履歴フォルダを更新しました');
       });
     }
     if(!isDriverMode) await tryAutoSendOnSave(stop);
