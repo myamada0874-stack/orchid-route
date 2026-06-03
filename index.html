@@ -1976,6 +1976,8 @@ async function pollSyncOnce(){
       // 状態をマージ
       const route = lastResults.results.routes.find(r => `driverState_${targetDate}_${r.vehicle.name}` === routeId);
       if(!route) continue;
+      // ★ 同期で変化があったstopを追跡 → 後でPDF生成
+      const newlySynced = [];
       route.stops.forEach(stop => {
         const remote = data.state[stop.webNo];
         if(!remote) return;
@@ -1986,8 +1988,32 @@ async function pollSyncOnce(){
           stop.signature = remote.signature || stop.signature;
           stop.deliveredAt = remote.deliveredAt || stop.deliveredAt;
           mergedCount++;
+          // 配達済 + 実サインがあれば PDF生成対象
+          if(stop.status === 'delivered' && stop.signature && stop.signature.length > 200){
+            newlySynced.push(stop);
+          }
         }
       });
+      // ★ 同期で取得した受領書のPDFを生成 + 保存 (バックグラウンド)
+      if(newlySynced.length > 0){
+        (async()=>{
+          for(const stop of newlySynced){
+            try{
+              // generateReceiptPDFForStop は base64 を返すので blob に変換
+              const base64 = await generateReceiptPDFForStop(stop);
+              if(!base64) continue;
+              const binStr = atob(base64);
+              const bytes = new Uint8Array(binStr.length);
+              for(let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+              const blob = new Blob([bytes], {type: 'application/pdf'});
+              await saveReceiptFile(stop, blob);
+              console.log(`📄 同期受領書PDF生成: ${stop.webNo || stop.name}`);
+            }catch(e){
+              console.warn(`受領書PDF生成失敗 ${stop.webNo}:`, e.message);
+            }
+          }
+        })();
+      }
     }catch(e){
       console.warn(`同期失敗 ${routeId}:`, e.message);
     }
@@ -1995,6 +2021,7 @@ async function pollSyncOnce(){
   syncLastFetched = new Date();
   if(mergedCount > 0){
     console.log(`✓ ${mergedCount}件の状態を同期しました`);
+    saveStateIDB().catch(()=>{}); // ★ IDBにも保存(再読込時もデータ保持)
     saveHistory(true).catch(()=>{});
     renderSelfDashboard();
     updateTabBadges();
@@ -8351,7 +8378,7 @@ async function loadSampleData(region){
   region = region || 'tokyo';
   // 届け日はすべて6/1で統一
   const year = new Date().getFullYear();
-  const datePool = [`${year}/06/02`];
+  const datePool = [`${year}/06/03`];
 
   // 画像対象(hasPhoto): true=商品撮影画像あり/お客様に画像送信対象
   // 自社配送: 8件中 5件にhasPhoto / 宅配: 3件中 2件にhasPhoto (Tokyo)
@@ -8475,15 +8502,15 @@ async function loadSampleData(region){
   alert(
     `✓ サンプルデータ${samples.length}件を読み込みました (${regionLabel}エリア)\n`+
     `\n【配送区分】\n`+
-    `  ・自社配送: ${selfCount}件 (届け日 2026/06/02)\n`+
-    `  ・宅配出荷: ${carrierCount}件 (出荷日 ${shipDateSample} → 届け日 2026/06/02)\n`+
+    `  ・自社配送: ${selfCount}件 (届け日 2026/06/03)\n`+
+    `  ・宅配出荷: ${carrierCount}件 (出荷日 ${shipDateSample} → 届け日 2026/06/03)\n`+
     `\n【画像送信対象 (📸 撮影画像あり)】\n`+
     `  ・合計: ${photoTotal}件 / ${samples.length}件\n`+
     `    - 自社配送のうち画像あり: ${photoSelfCount}件 (届け日当日 朝7時送信予定)\n`+
     `    - 宅配のうち画像あり: ${photoCarrierCount}件 (出荷日当日 朝7時送信予定)\n`+
     `\n出発拠点も自動切替済。\n`+
     `📋「配達を組む」タブで「🚚 ルート最適化を実行」を押してください。\n`+
-    `🚚 自社配達タブの日付ピッカーで 2026-06-02 を選ぶと自社配送先が表示されます。\n`+
+    `🚚 自社配達タブの日付ピッカーで 2026-06-03 を選ぶと自社配送先が表示されます。\n`+
     `📨 画像送信タブで日付を切り替えると、自社=届け日 / 宅配=出荷日 で対象を確認できます。`
   );
 }
