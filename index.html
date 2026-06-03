@@ -3108,7 +3108,7 @@ function initDriverMode(){
     const json = LZString.decompressFromEncodedURIComponent(compressed);
     if(!json) throw new Error('データ復元失敗');
     const raw = JSON.parse(json);
-    // QRから同期設定を自動適用 (スマホ毎の手動設定不要に)
+    // QRから同期設定を自動適用 (QRに含まれていれば。なくてもDEFAULT_SYNC_WORKER_URLでフォールバック)
     applyDriverSyncSettings(raw);
     // 日付の正規化: YYYY/MM/DD形式に統一 (旧版QRはMM-DD or YYYY-MM-DDがあり得る)
     let normalizedDate = raw.da || '';
@@ -7637,31 +7637,23 @@ function buildDriverPayload(vi){
   // QRサイズを抑えるため、極めて短いキー名・最小フィールドのみ
   // 緯度経度は小数点4桁まで(精度約11m、十分)
   const r4 = n => Math.round(n*10000)/10000;
-  // 同期設定をQRに同梱(配送員スマホで自動設定される)
-  const syncEnabled = document.getElementById('syncEnabled')?.checked || false;
-  const workerUrl = (document.getElementById('workerUrl')?.value||'').trim();
-  const authToken = (document.getElementById('mailAuthToken')?.value||'').trim();
   // 配達日: ルートの最頻配達日(または計画タブの選択日)を YYYY/MM/DD で
   let deliveryDate = '';
   try{
     deliveryDate = (typeof getPlanDate === 'function') ? getPlanDate() : '';
   }catch(e){}
   if(!deliveryDate){
-    // フォールバック: 1件目stopのdeliveryDate or 今日
     deliveryDate = (route.stops[0]?.deliveryDate) || (function(){
       const d = new Date();
       return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
     })();
   }
+  // QRデータは最小限に(同期設定はDEFAULT_SYNC_WORKER_URLで自動)
   const payload = {
     v: route.vehicle.name,
     d: route.vehicle.driver||'',
     c: route.vehicle.color,
-    da: deliveryDate, // YYYY/MM/DD形式に統一 (PC側と整合)
-    // 同期設定 (キー短縮): sy=有効, wu=WorkerURL, at=トークン
-    sy: syncEnabled ? 1 : 0,
-    wu: workerUrl,
-    at: authToken,
+    da: deliveryDate, // YYYY/MM/DD形式
     s: route.stops.map((s,i)=>{
       const o = {
         w: s.webNo||'',
