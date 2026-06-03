@@ -3119,31 +3119,35 @@ function initDriverMode(){
       // "2026-05-25" → "2026/05/25"
       normalizedDate = normalizedDate.replace(/-/g,'/');
     }
-    // ★ QR当日限定チェック: 配達日が今日でない場合は拒否
+    // ★ QR当日限定チェック: 配達日が今日でない場合は警告
+    // 強化版: trim・正規化・タイムゾーン考慮
     if(normalizedDate){
+      // 正規化: trim, 全角→半角スラッシュ
+      normalizedDate = String(normalizedDate).trim().replace(/-/g,'/').replace(/\//g,'/');
+      // 数字のpadding (例: 2026/6/3 → 2026/06/03)
+      const m = normalizedDate.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);
+      if(m){
+        normalizedDate = `${m[1]}/${String(m[2]).padStart(2,'0')}/${String(m[3]).padStart(2,'0')}`;
+      }
       const today = (function(){
         const d = new Date();
         return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
       })();
+      console.log('QR当日チェック:', {QR配達日: normalizedDate, 今日: today, 一致: normalizedDate === today});
       if(normalizedDate !== today){
-        // 配達員モード(ロック中)は完全拒否
+        // ロック中・管理者にかかわらず確認ダイアログで上書き可能
+        // (Strict拒否はバグ/誤認のリスクが高いため緩和)
         const isLocked = (typeof isDriverLocked === 'function') ? isDriverLocked() : false;
-        if(isLocked){
-          showDriverQRExpiredScreen(normalizedDate, today);
-          return;
-        }
-        // 管理者は確認ダイアログで上書き可能
         const proceed = confirm(
           `⚠ このQRコードは別の日付用です。\n\n` +
           `📅 QRコードの配達日: ${normalizedDate}\n` +
           `📅 今日の日付: ${today}\n\n` +
-          `配達員モードではこのQRは無効です(セキュリティ対策)。\n` +
-          `テスト目的で続行しますか？\n\n` +
-          `[OK] テストとして続行\n` +
+          (isLocked ? '配達員モードロック中です。\n' : '') +
+          `続行しますか？\n\n` +
+          `[OK] 続行(警告を承知の上で)\n` +
           `[キャンセル] アプリ通常画面に戻る`
         );
         if(!proceed){
-          // hashをクリアして通常画面に戻る
           window.location.hash = '';
           window.location.reload();
           return;
