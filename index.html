@@ -7925,6 +7925,8 @@ async function saveSubSigAndReceipt(){
   await saveReceipt();
   _skipSignConfirm = false;
 }
+
+function sigGetPos(e){
   const canvas = document.getElementById('sigCanvas');
   const rect = canvas.getBoundingClientRect();
   let x, y;
