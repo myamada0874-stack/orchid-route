@@ -8878,15 +8878,15 @@ async function loadSampleData(region){
   region = region || 'tokyo';
   // 届け日はすべて6/1で統一
   const year = new Date().getFullYear();
-  const datePool = [`${year}/06/03`];
+  const datePool = [`${year}/06/04`];
 
   // 画像対象(hasPhoto): true=商品撮影画像あり/お客様に画像送信対象
   // 自社配送: 8件中 5件にhasPhoto / 宅配: 3件中 2件にhasPhoto (Tokyo)
   const samplesTokyo = [
     // 自社配送 (12件: hasPhoto=true 7件, false 5件)
-    {webNo:'2026052500001', agencyOrderNo:'AGT-20260603-001', name:'銀座花亭', sender:'株式会社グリーン商事', address:'東京都中央区銀座4-6-16', qty:2, size:'3本立', timeRaw:'09:00-12:00', hasPhoto:true, photoTiming:'pre'},
-    {webNo:'2026052500002', agencyOrderNo:'AGT-20260603-002', name:'丸の内オフィス受付', sender:'山田太郎', address:'東京都千代田区丸の内2-4-1', qty:1, size:'5本立', timeRaw:'10:00-11:00', hasPhoto:false},
-    {webNo:'2026052500003', agencyOrderNo:'AGT-20260603-003', name:'六本木ヒルズフラワー', sender:'株式会社アクメ', address:'東京都港区六本木6-10-1', qty:3, size:'3本立', timeRaw:'13:00-15:00', hasPhoto:true, photoTiming:'pre'},
+    {webNo:'2026052500001', agencyOrderNo:'AGT-20260604-001', name:'銀座花亭', sender:'株式会社グリーン商事', address:'東京都中央区銀座4-6-16', qty:2, size:'3本立', timeRaw:'09:00-12:00', hasPhoto:true, photoTiming:'pre'},
+    {webNo:'2026052500002', agencyOrderNo:'AGT-20260604-002', name:'丸の内オフィス受付', sender:'山田太郎', address:'東京都千代田区丸の内2-4-1', qty:1, size:'5本立', timeRaw:'10:00-11:00', hasPhoto:false},
+    {webNo:'2026052500003', agencyOrderNo:'AGT-20260604-003', name:'六本木ヒルズフラワー', sender:'株式会社アクメ', address:'東京都港区六本木6-10-1', qty:3, size:'3本立', timeRaw:'13:00-15:00', hasPhoto:true, photoTiming:'pre'},
     {webNo:'2026052500004', name:'渋谷スカイラウンジ', sender:'佐藤花子', address:'東京都渋谷区渋谷2-24-12', qty:1, size:'大輪', timeRaw:'14:00-17:00', hasPhoto:true},
     {webNo:'2026052500005', name:'新宿パークタワー', sender:'有限会社サクラ', address:'東京都新宿区西新宿3-7-1', qty:2, size:'3本立', timeRaw:'10:00-13:00', hasPhoto:false},
     {webNo:'2026052500006', name:'品川インターシティ', sender:'田中商店', address:'東京都港区港南2-15-1', qty:1, size:'5本立', timeRaw:'09:00-11:00', hasPhoto:true},
@@ -9003,15 +9003,15 @@ async function loadSampleData(region){
   alert(
     `✓ サンプルデータ${samples.length}件を読み込みました (${regionLabel}エリア)\n`+
     `\n【配送区分】\n`+
-    `  ・自社配送: ${selfCount}件 (届け日 2026/06/03)\n`+
-    `  ・宅配出荷: ${carrierCount}件 (出荷日 ${shipDateSample} → 届け日 2026/06/03)\n`+
+    `  ・自社配送: ${selfCount}件 (届け日 2026/06/04)\n`+
+    `  ・宅配出荷: ${carrierCount}件 (出荷日 ${shipDateSample} → 届け日 2026/06/04)\n`+
     `\n【画像送信対象 (📸 撮影画像あり)】\n`+
     `  ・合計: ${photoTotal}件 / ${samples.length}件\n`+
     `    - 自社配送のうち画像あり: ${photoSelfCount}件 (届け日当日 朝7時送信予定)\n`+
     `    - 宅配のうち画像あり: ${photoCarrierCount}件 (出荷日当日 朝7時送信予定)\n`+
     `\n出発拠点も自動切替済。\n`+
     `📋「配達を組む」タブで「🚚 ルート最適化を実行」を押してください。\n`+
-    `🚚 自社配達タブの日付ピッカーで 2026-06-03 を選ぶと自社配送先が表示されます。\n`+
+    `🚚 自社配達タブの日付ピッカーで 2026-06-04 を選ぶと自社配送先が表示されます。\n`+
     `📨 画像送信タブで日付を切り替えると、自社=届け日 / 宅配=出荷日 で対象を確認できます。`
   );
 }
