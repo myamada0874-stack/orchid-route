@@ -1975,12 +1975,8 @@ function switchMainTab(name){
   if(name === 'plan' && map) setTimeout(()=>map.invalidateSize(), 50);
   // タブバッジ更新
   updateTabBadges();
-  // 同期ポーリングの起動/停止 (自社配達タブ表示時のみ稼働)
-  if(name === 'self'){
-    startSyncPolling();
-  } else {
-    stopSyncPolling();
-  }
+  // 同期ポーリングは常時稼働 (どのタブでも同期する)
+  startSyncPolling();
 }
 
 //============================================
@@ -2026,10 +2022,15 @@ async function pollSyncOnce(){
   if(!workerUrl) return;
   // アクティブな車両の routeId 一覧を生成 (今日の自社配達のみ)
   const targetDate = getSelfFilterDate(); // YYYY/MM/DD
+  // すべての車両をポーリング対象に (どの車両もデータあれば反映)
   const routeIds = lastResults.results.routes
-    .filter(r => r.stops && r.stops.some(s => s.deliveryType !== 'carrier' && stopMatchesDate(s, targetDate)))
+    .filter(r => r.stops && r.stops.length > 0) // 配達先がある車両だけ
     .map(r => `driverState_${targetDate}_${r.vehicle.name}`);
-  if(routeIds.length === 0) return;
+  if(routeIds.length === 0){
+    console.log('[同期] ポーリング対象なし', {targetDate, routes: lastResults.results.routes.length});
+    return;
+  }
+  console.log(`[同期] ${routeIds.length}車両をポーリング:`, routeIds.map(id => id.split('_').slice(-1)[0]).join(', '));
   let mergedCount = 0;
   for(const routeId of routeIds){
     try{
@@ -2063,26 +2064,48 @@ async function pollSyncOnce(){
       });
       // ★ 同期で取得した受領書のPDFを生成 + 保存 (バックグラウンド)
       if(newlySynced.length > 0){
+        // 受領書フォルダ未設定なら警告
+        if(!receiptFolderHandle){
+          console.warn('⚠ 受領書保存先フォルダが未設定です。⚙️ 設定 → ⑤ 受領書 保存先 でフォルダを選択してください。');
+          showToast(`⚠ PDFを保存するには ⚙️ 設定 → ⑤ 受領書フォルダ を選択してください`, 'warn', 8000);
+        }
         (async()=>{
-          let pdfOk = 0;
+          let pdfOk = 0, pdfFail = 0;
+          const failMsgs = [];
           for(const stop of newlySynced){
             try{
+              console.log(`📄 PDF生成開始: ${stop.webNo} (${stop.name})`);
               const base64 = await generateReceiptPDFForStop(stop);
-              if(!base64) continue;
+              if(!base64){
+                throw new Error('generateReceiptPDFForStopがnullを返しました');
+              }
               const binStr = atob(base64);
               const bytes = new Uint8Array(binStr.length);
               for(let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
               const blob = new Blob([bytes], {type: 'application/pdf'});
-              await saveReceiptFile(stop, blob);
-              pdfOk++;
-              console.log(`📄 同期受領書PDF生成: ${stop.webNo || stop.name}`);
+              if(receiptFolderHandle){
+                await saveReceiptFile(stop, blob);
+                pdfOk++;
+                console.log(`✓ 📄 PDF保存成功: ${stop.webNo}/${stop.webNo}.pdf (${(blob.size/1024).toFixed(1)}KB)`);
+              } else {
+                // フォルダ未設定: メモリ内のみ保存しない(ダウンロードは背景で失敗するため)
+                pdfFail++;
+                console.warn(`⚠ PDF生成済だが保存先フォルダなし: ${stop.webNo}`);
+              }
             }catch(e){
-              console.warn(`受領書PDF生成失敗 ${stop.webNo}:`, e.message);
+              pdfFail++;
+              failMsgs.push(`${stop.webNo}: ${e.message}`);
+              console.error(`✗ PDF生成失敗 ${stop.webNo}:`, e);
             }
           }
           if(pdfOk > 0){
-            const folderInfo = receiptFolderHandle ? `${receiptFolderHandle.name}/` : 'ダウンロード';
-            showToast(`📄 受領書PDF ${pdfOk}件を保存しました → ${folderInfo}`, 'success', 5000);
+            showToast(`📄 受領書PDF ${pdfOk}件 保存しました → ${receiptFolderHandle.name}/`, 'success', 5000);
+          }
+          if(pdfFail > 0){
+            console.warn(`⚠ PDF失敗 ${pdfFail}件: ${failMsgs.join(', ')}`);
+            if(receiptFolderHandle){
+              showToast(`⚠ PDF生成失敗 ${pdfFail}件 (F12コンソール参照)`, 'warn', 6000);
+            }
           }
         })();
       }
@@ -3043,6 +3066,13 @@ window.addEventListener('DOMContentLoaded', async ()=>{
 
   // 朝7時以降なら画像送信対象を自動チェック
   setTimeout(()=>{ try{ autoCheckPhotoMails(); }catch(e){ console.warn(e); } }, 2000);
+
+  // ★ ページ読込時に同期ポーリング自動開始 (ドライバーモードでなければ)
+  if(typeof startSyncPolling === 'function' && !document.body.classList.contains('driver-mode')){
+    setTimeout(()=>{
+      try{ startSyncPolling(); }catch(e){ console.warn('同期ポーリング起動失敗:', e); }
+    }, 3000);
+  }
 });
 
 //============================================
