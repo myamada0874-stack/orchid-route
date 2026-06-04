@@ -550,18 +550,28 @@ input[type="file"]{display:none;}
 .receipt-modal-box{
   background:#fff;border-radius:8px;
   width:100%;max-width:520px;max-height:95vh;
-  overflow-y:auto;display:flex;flex-direction:column;
+  display:flex;flex-direction:column;
+  overflow:hidden; /* ヘッダー/フッターを固定し、bodyだけスクロールさせるため */
 }
 .receipt-modal-header{
   padding:14px 18px;background:var(--primary);color:#fff;
   border-radius:8px 8px 0 0;display:flex;justify-content:space-between;align-items:center;
+  flex-shrink:0; /* ヘッダー固定 */
+  position:sticky;top:0;z-index:10;
 }
 .receipt-modal-header h3{font-size:15px;font-weight:600;}
 .receipt-modal-header .close-btn{
-  background:transparent;color:#fff;border:1px solid rgba(255,255,255,0.5);
-  border-radius:4px;padding:4px 10px;font-size:18px;cursor:pointer;
+  background:#fff;color:var(--primary);border:none;
+  border-radius:4px;padding:8px 14px;font-size:16px;font-weight:700;cursor:pointer;
+  min-width:44px;min-height:44px; /* スマホタップしやすく */
+  display:flex;align-items:center;justify-content:center;
 }
-.receipt-modal-body{padding:16px 18px;}
+.receipt-modal-body{
+  padding:16px 18px;
+  overflow-y:auto; /* ここだけスクロール */
+  flex:1;
+  -webkit-overflow-scrolling:touch;
+}
 #receiptPreview{
   border:1px solid var(--border);border-radius:4px;padding:14px;
   background:#fff;font-size:13px;margin-bottom:12px;
@@ -614,12 +624,43 @@ input[type="file"]{display:none;}
 .status-selector button.absent.active{background:var(--danger);border-color:var(--danger);}
 .status-selector button .icon{font-size:18px;}
 
-/* モーダルフッター */
-.receipt-modal-footer{
-  padding:14px 18px;border-top:1px solid var(--border);
-  display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;
+/* ★ ドライバーモード: ステータスボタンを大きく + 配達済を強調 */
+body.driver-mode .status-selector{
+  display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;
 }
-.receipt-modal-footer button{font-size:13px;padding:8px 14px;}
+body.driver-mode .status-selector button{
+  padding:18px 8px;font-size:14px;font-weight:600;min-height:60px;
+}
+body.driver-mode .status-selector button[data-status="delivered"]{
+  font-size:16px;
+}
+body.driver-mode .status-selector button[data-status="absent"],
+body.driver-mode .status-selector button[data-status="pending"]{
+  font-size:12px;color:var(--text-light);
+}
+body.driver-mode .status-selector button .icon{font-size:24px;}
+
+/* ★ ドライバーモード: サインパッドを大きく (高さ1.5倍) */
+body.driver-mode #sigCanvas{
+  height:240px !important;min-height:240px;
+}
+body.driver-mode .sig-pad-wrap label{
+  font-size:14px;font-weight:600;color:var(--primary);
+}
+
+/* モーダルフッター(常時表示・スマホで隠れない) */
+.receipt-modal-footer{
+  padding:12px 18px;border-top:1px solid var(--border);
+  display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;
+  flex-shrink:0; /* フッター固定 */
+  background:#fff;
+  box-shadow:0 -2px 6px rgba(0,0,0,0.05);
+}
+.receipt-modal-footer button{
+  font-size:14px;padding:12px 18px;
+  min-height:44px; /* スマホタップしやすく */
+  font-weight:600;
+}
 
 /* フォルダ選択ボタン */
 .folder-card{background:#fff8ee;border:1px solid var(--accent);border-radius:4px;padding:8px 10px;margin-top:6px;font-size:12px;display:flex;justify-content:space-between;align-items:center;gap:8px;}
@@ -1206,6 +1247,31 @@ document.addEventListener('DOMContentLoaded', function(){
       </div>
     </div>
 
+    <!-- リアルタイム同期 (Cloudflare KV) -->
+    <div class="card settings-card" id="setting-card-sync">
+      <h2>⑨ リアルタイム同期 <span class="badge" style="background:#0066cc;">KV</span></h2>
+      <div class="form-row">
+        <div class="checkbox-row">
+          <input type="checkbox" id="syncEnabled" />
+          <label for="syncEnabled"><b>🔄 ドライバー⇄管理者 リアルタイム同期を有効化</b></label>
+        </div>
+      </div>
+      <div class="help-text">
+        ⑧ Worker URL と認証トークンを使い、Cloudflare KVを介してリアルタイムでドライバーの作業状況を管理者画面に反映します。<br>
+        <b>ドライバー:</b> サイン保存時に状態を自動アップロード(オフライン時はlocalStorage、再接続で送信)<br>
+        <b>管理者:</b> 自社配達タブで15秒ごとに状態を取得して進捗反映
+      </div>
+      <div class="form-row" style="margin-top:8px;">
+        <label>ポーリング間隔(秒)</label>
+        <input type="number" id="syncPollInterval" value="15" min="5" max="300" style="width:80px;" />
+        <span class="help-text" style="display:inline-block;margin-left:8px;">短いほどリアルタイム性UP・KVリード回数増(無料枠10万/日)</span>
+      </div>
+      <button class="btn-small btn-secondary" style="margin-top:6px;width:100%;" onclick="testSyncWorker()">🔧 同期テスト(設定検証)</button>
+      <div style="margin-top:8px;padding:6px 10px;background:#e7f3ff;border-radius:3px;font-size:11px;color:#1e3a8a;">
+        💡 セットアップ手順は <code>SYNC_SETUP_ARTGREEN.md</code> 参照。⑧ Worker URLを共用するので、KVバインディング(<code>ROUTES_KV</code>)を追加するだけ。
+      </div>
+    </div>
+
     <!-- デバイス役割 -->
     <div class="card settings-card" id="setting-card-role" style="background:#fff8ee;border-left:4px solid var(--accent);">
       <h2>⑩ デバイス役割 <span class="badge" id="currentRoleBadge" style="background:var(--primary);">管理者</span></h2>
@@ -1282,7 +1348,8 @@ document.addEventListener('DOMContentLoaded', function(){
         <label style="font-size:13px;font-weight:600;color:var(--primary);margin-left:8px;">👤 ドライバー:</label>
         <select id="selfDriverFilter" onchange="onSelfDriverChange()" style="padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:13px;cursor:pointer;"><option value="">全ドライバー</option></select>
       </div>
-      <div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span id="syncIndicator"></span>
         <button class="btn-small btn-secondary" onclick="openHistoryModal()">📅 過去履歴</button>
         <button class="btn-small" onclick="openApprovalBox()" id="selfApprovalBtn" style="background:var(--accent);">📨 承認BOX</button>
       </div>
@@ -1501,7 +1568,7 @@ document.addEventListener('DOMContentLoaded', function(){
   <div class="receipt-modal-box">
     <div class="receipt-modal-header">
       <h3 id="receiptModalTitle">受領書</h3>
-      <button class="close-btn" onclick="closeReceiptModal()">✕</button>
+      <button class="close-btn" onclick="closeReceiptModal()" title="閉じて配達リストへ戻る">✕ 閉じる</button>
     </div>
     <div class="receipt-modal-body">
 
@@ -1513,13 +1580,13 @@ document.addEventListener('DOMContentLoaded', function(){
         <label style="font-size:12px;color:var(--text-light);font-weight:500;display:block;margin-bottom:6px;">配達ステータス</label>
         <div class="status-selector">
           <button data-status="delivered" onclick="setStatus('delivered')" class="delivered">
-            <span class="icon">✓</span>配達済サイン済
+            <span class="icon">✓</span>受領完了
           </button>
           <button data-status="absent" onclick="setStatus('absent')" class="absent">
-            <span class="icon">↩</span>不在持ち帰り
+            <span class="icon">↩</span>不在
           </button>
           <button data-status="pending" onclick="setStatus('pending')">
-            <span class="icon">⏳</span>未配達に戻す
+            <span class="icon">⏳</span>未配達
           </button>
         </div>
       </div>
@@ -1535,9 +1602,14 @@ document.addEventListener('DOMContentLoaded', function(){
         <div class="help-text" style="margin-top:4px;">サイン保存時に自動入力されます。違う時刻に変更したい場合はここで編集</div>
       </div>
 
-      <!-- サインパッド -->
+      <!-- サインパッド (PC用閲覧 / ドライバー用は別モーダル) -->
       <div class="sig-pad-wrap" id="sigPadSection">
         <label>受領サイン (指またはスタイラスでお名前を)</label>
+        <!-- ドライバーモード: 大ボタン (サインサブモーダルを開く) -->
+        <button id="openSignSubModalBtn" onclick="openSignSubModal()" style="width:100%;padding:20px;background:var(--primary);color:#fff;border:none;border-radius:6px;font-size:18px;font-weight:700;cursor:pointer;display:none;margin-bottom:8px;">
+          ✍ サインを貰う
+        </button>
+        <!-- 従来のキャンバス: PCではサイン閲覧、ドライバーは非表示 -->
         <canvas id="sigCanvas" width="480" height="160"></canvas>
         <div class="sig-pad-controls">
           <button class="btn-secondary" onclick="clearSig()">クリア</button>
@@ -1549,6 +1621,30 @@ document.addEventListener('DOMContentLoaded', function(){
     <div class="receipt-modal-footer">
       <button class="btn-secondary" onclick="closeReceiptModal()">キャンセル</button>
       <button onclick="saveReceipt()" id="saveReceiptBtn">💾 保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ✍ サインサブモーダル (ドライバーモード専用) -->
+<div id="signSubModal" class="receipt-modal" style="z-index:10001;">
+  <div class="receipt-modal-box" style="max-width:600px;">
+    <div class="receipt-modal-header" style="background:var(--primary);">
+      <h3>✍ サインを貰う</h3>
+      <button class="close-btn" onclick="closeSignSubModal()">✕</button>
+    </div>
+    <div class="receipt-modal-body">
+      <div id="signSubInfo" style="padding:8px 10px;background:#eef5f1;color:var(--primary);border-radius:4px;font-size:13px;margin-bottom:10px;text-align:center;font-weight:600;"></div>
+      <div style="margin-bottom:8px;">
+        <label style="font-size:14px;font-weight:600;color:var(--primary);">受領サイン (指でなぞって書いてください)</label>
+      </div>
+      <canvas id="signSubCanvas" width="560" height="280" style="border:3px solid var(--primary);border-radius:6px;background:#fff;width:100%;height:280px;touch-action:none;cursor:crosshair;display:block;"></canvas>
+      <div style="display:flex;gap:8px;margin-top:10px;justify-content:center;">
+        <button class="btn-secondary" onclick="clearSubSig()" style="padding:10px 20px;font-size:14px;">🗑 クリア</button>
+      </div>
+    </div>
+    <div class="receipt-modal-footer">
+      <button class="btn-secondary" onclick="closeSignSubModal()" style="padding:12px 24px;">キャンセル</button>
+      <button onclick="saveSubSigAndReceipt()" id="saveSubSigBtn" style="padding:12px 24px;background:var(--success);color:#fff;font-weight:700;font-size:15px;">💾 保存して受領確定</button>
     </div>
   </div>
 </div>
@@ -1669,6 +1765,9 @@ function openBatchSignModal(){
   updateStatusButtons('delivered');
   // 完了時刻欄は仮stopで初期化
   initCompletedTimeInputs({});
+  // PCではサイン不可 / ドライバーモードのみ可
+  const isDriverMode = document.body.classList.contains('driver-mode');
+  applyReceiptSignPolicy(isDriverMode);
   setupSigPad();
   clearSig();
   document.getElementById('receiptModal').classList.add('show');
@@ -1725,7 +1824,12 @@ async function saveBatchReceipts(){
   }
 
   // 履歴保存
-  if(!isDriverMode) saveHistory(true);
+  if(!isDriverMode){
+    saveHistory(true);
+    // ★ IndexedDBに永続化(ブラウザ更新で消えないように)
+    saveStateIDB().catch(e => console.warn('IndexedDB保存失敗:', e));
+    // PC→KV同期は撤去 (シンプル化: スマホ→PC一方向のみ)
+  }
 
   btn.textContent = `✓ ${successCount}件保存しました`;
   setTimeout(()=>{
@@ -1826,6 +1930,7 @@ function moveSettingsToModal(){
     'setting-card-photo-folder',
     'setting-card-history-folder',
     'setting-card-mail',
+    'setting-card-sync',
     'setting-card-agency',
     'setting-card-role',
     'setting-card-data-mgmt'
@@ -1860,6 +1965,223 @@ function switchMainTab(name){
   if(name === 'plan' && map) setTimeout(()=>map.invalidateSize(), 50);
   // タブバッジ更新
   updateTabBadges();
+  // 同期ポーリングは常時稼働 (どのタブでも同期する)
+  startSyncPolling();
+}
+
+//============================================
+// Cloudflare KV 同期 (管理者側のポーリング)
+//============================================
+let syncPollTimer = null;
+let syncLastFetched = null;
+
+function startSyncPolling(){
+  stopSyncPolling();
+  // 設定階層: DOM → localStorage → ハードコード
+  let syncEnabled = document.getElementById('syncEnabled')?.checked;
+  let workerUrl = (document.getElementById('workerUrl')?.value||'').trim();
+  try{
+    const s = JSON.parse(localStorage.getItem('settings')||'{}');
+    if(syncEnabled === undefined || syncEnabled === null) syncEnabled = s.syncEnabled;
+    if(!workerUrl) workerUrl = (s.workerUrl||'').trim();
+  }catch(e){}
+  if(syncEnabled === undefined || syncEnabled === null) syncEnabled = DEFAULT_SYNC_ENABLED;
+  if(!workerUrl) workerUrl = DEFAULT_SYNC_WORKER_URL;
+  if(!syncEnabled || !workerUrl || !lastResults) return;
+  const interval = (parseInt(document.getElementById('syncPollInterval')?.value)||15)*1000;
+  // 即座に1回 → 以降は定期実行
+  pollSyncOnce();
+  syncPollTimer = setInterval(pollSyncOnce, interval);
+}
+
+function stopSyncPolling(){
+  if(syncPollTimer){ clearInterval(syncPollTimer); syncPollTimer = null; }
+}
+
+async function pollSyncOnce(){
+  if(!lastResults) return;
+  let workerUrl = (document.getElementById('workerUrl')?.value||'').trim();
+  let authToken = (document.getElementById('mailAuthToken')?.value||'').trim();
+  // 階層フォールバック
+  try{
+    const s = JSON.parse(localStorage.getItem('settings')||'{}');
+    if(!workerUrl) workerUrl = (s.workerUrl||'').trim();
+    if(!authToken) authToken = (s.mailAuthToken||'').trim();
+  }catch(e){}
+  if(!workerUrl) workerUrl = DEFAULT_SYNC_WORKER_URL;
+  if(!workerUrl) return;
+  // アクティブな車両の routeId 一覧を生成 (今日の自社配達のみ)
+  const targetDate = getSelfFilterDate(); // YYYY/MM/DD
+  // すべての車両をポーリング対象に (どの車両もデータあれば反映)
+  const routeIds = lastResults.results.routes
+    .filter(r => r.stops && r.stops.length > 0) // 配達先がある車両だけ
+    .map(r => `driverState_${targetDate}_${r.vehicle.name}`);
+  if(routeIds.length === 0){
+    console.log('[同期] ポーリング対象なし', {targetDate, routes: lastResults.results.routes.length});
+    return;
+  }
+  console.log(`[同期] ${routeIds.length}車両をポーリング:`, routeIds.map(id => id.split('_').slice(-1)[0]).join(', '));
+  let mergedCount = 0;
+  for(const routeId of routeIds){
+    try{
+      const url = `${workerUrl.replace(/\/$/,'')}/sync?routeId=${encodeURIComponent(routeId)}`;
+      const headers = {};
+      if(authToken) headers['X-Auth-Token'] = authToken;
+      const res = await fetch(url, {method:'GET', headers});
+      if(!res.ok) continue;
+      const data = await res.json();
+      if(!data || !data.state) continue;
+      // 状態をマージ
+      const route = lastResults.results.routes.find(r => `driverState_${targetDate}_${r.vehicle.name}` === routeId);
+      if(!route) continue;
+      // ★ 同期で変化があったstopを追跡 → 後でPDF生成
+      const newlySynced = [];
+      route.stops.forEach(stop => {
+        const remote = data.state[stop.webNo];
+        if(!remote) return;
+        const remoteTime = remote.deliveredAt ? new Date(remote.deliveredAt).getTime() : 0;
+        const localTime = stop.deliveredAt ? new Date(stop.deliveredAt).getTime() : 0;
+        if(remoteTime > localTime){
+          stop.status = remote.status || stop.status;
+          stop.signature = remote.signature || stop.signature;
+          stop.deliveredAt = remote.deliveredAt || stop.deliveredAt;
+          mergedCount++;
+          // 配達済 + 実サインがあれば PDF生成対象
+          if(stop.status === 'delivered' && stop.signature && stop.signature.length > 200){
+            newlySynced.push(stop);
+          }
+        }
+      });
+      // ★ 同期で取得した受領書のPDFを生成 + 保存 (バックグラウンド)
+      if(newlySynced.length > 0){
+        // 受領書フォルダ未設定なら警告
+        if(!receiptFolderHandle){
+          console.warn('⚠ 受領書保存先フォルダが未設定です。⚙️ 設定 → ⑤ 受領書 保存先 でフォルダを選択してください。');
+          showToast(`⚠ PDFを保存するには ⚙️ 設定 → ⑤ 受領書フォルダ を選択してください`, 'warn', 8000);
+        }
+        (async()=>{
+          let pdfOk = 0, pdfFail = 0;
+          const failMsgs = [];
+          for(const stop of newlySynced){
+            try{
+              console.log(`📄 PDF生成開始: ${stop.webNo} (${stop.name})`);
+              const base64 = await generateReceiptPDFForStop(stop);
+              if(!base64){
+                throw new Error('generateReceiptPDFForStopがnullを返しました');
+              }
+              const binStr = atob(base64);
+              const bytes = new Uint8Array(binStr.length);
+              for(let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+              const blob = new Blob([bytes], {type: 'application/pdf'});
+              if(receiptFolderHandle){
+                await saveReceiptFile(stop, blob);
+                pdfOk++;
+                console.log(`✓ 📄 PDF保存成功: ${stop.webNo}/${stop.webNo}.pdf (${(blob.size/1024).toFixed(1)}KB)`);
+              } else {
+                // フォルダ未設定: メモリ内のみ保存しない(ダウンロードは背景で失敗するため)
+                pdfFail++;
+                console.warn(`⚠ PDF生成済だが保存先フォルダなし: ${stop.webNo}`);
+              }
+            }catch(e){
+              pdfFail++;
+              failMsgs.push(`${stop.webNo}: ${e.message}`);
+              console.error(`✗ PDF生成失敗 ${stop.webNo}:`, e);
+            }
+          }
+          if(pdfOk > 0){
+            showToast(`📄 受領書PDF ${pdfOk}件 保存しました → ${receiptFolderHandle.name}/`, 'success', 5000);
+          }
+          if(pdfFail > 0){
+            console.warn(`⚠ PDF失敗 ${pdfFail}件: ${failMsgs.join(', ')}`);
+            if(receiptFolderHandle){
+              showToast(`⚠ PDF生成失敗 ${pdfFail}件 (F12コンソール参照)`, 'warn', 6000);
+            }
+          }
+        })();
+      }
+    }catch(e){
+      console.warn(`同期失敗 ${routeId}:`, e.message);
+    }
+  }
+  syncLastFetched = new Date();
+  if(mergedCount > 0){
+    console.log(`✓ ${mergedCount}件の状態を同期しました`);
+    saveStateIDB().catch(()=>{}); // ★ IDBにも保存(再読込時もデータ保持)
+    saveHistory(true).catch(()=>{});
+    // ★ 受領書モーダル表示中なら自動更新(同期サインを即反映)
+    const modal = document.getElementById('receiptModal');
+    if(modal && modal.classList.contains('show') && currentReceiptStop){
+      // 該当stopが同期で更新されていれば再描画
+      const route = lastResults.results.routes.find(r => r.stops.includes(currentReceiptStop));
+      if(route){
+        const si = route.stops.indexOf(currentReceiptStop);
+        renderReceiptPreview(currentReceiptStop, route, si);
+        applyReceiptSignPolicy(document.body.classList.contains('driver-mode'));
+        // サインキャンバスにも反映
+        clearSig();
+        if(currentReceiptStop.signature && currentReceiptStop.signature.length > 200){
+          const img = new Image();
+          img.onload = ()=>{
+            const c = document.getElementById('sigCanvas');
+            sigCtx.drawImage(img, 0, 0, c.width, c.height);
+            sigHasContent = true;
+          };
+          img.src = currentReceiptStop.signature;
+        }
+      }
+    }
+    renderSelfDashboard();
+    updateTabBadges();
+    showToast(`☁ ${mergedCount}件の配送状況を同期しました`, 'info', 3000);
+  }
+  updateSyncIndicator();
+}
+
+function updateSyncIndicator(){
+  const el = document.getElementById('syncIndicator');
+  if(!el) return;
+  const syncEnabled = document.getElementById('syncEnabled')?.checked;
+  if(!syncEnabled){
+    el.innerHTML = '';
+    return;
+  }
+  const last = syncLastFetched ? new Date(syncLastFetched).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '-';
+  el.innerHTML = `<span style="background:#e7f3ff;color:#1e3a8a;padding:2px 8px;border-radius:3px;font-size:11px;">☁ 同期 ${last}</span>`;
+}
+
+async function testSyncWorker(){
+  const workerUrl = (document.getElementById('workerUrl')?.value||'').trim();
+  const authToken = (document.getElementById('mailAuthToken')?.value||'').trim();
+  if(!workerUrl){
+    alert('Worker URLが未設定です。先に⑧でWorker URLを入力してください。');
+    return;
+  }
+  showLoading('同期テスト中...');
+  try{
+    const testId = `test_${Date.now()}`;
+    const testData = JSON.stringify({saved: new Date().toISOString(), state: {test: {status: 'delivered'}}});
+    const headers = {'Content-Type':'application/json'};
+    if(authToken) headers['X-Auth-Token'] = authToken;
+    const postUrl = `${workerUrl.replace(/\/$/,'')}/sync?routeId=${encodeURIComponent(testId)}`;
+    const postRes = await fetch(postUrl, {method:'POST', headers, body: testData});
+    if(!postRes.ok){
+      throw new Error(`POST失敗 HTTP ${postRes.status}: ${(await postRes.text()).substring(0,200)}`);
+    }
+    const getRes = await fetch(postUrl, {method:'GET', headers});
+    if(!getRes.ok){
+      throw new Error(`GET失敗 HTTP ${getRes.status}`);
+    }
+    const got = await getRes.json();
+    hideLoading();
+    if(got.state && got.state.test){
+      alert('✓ 同期テスト成功!\n\nCloudflare KV への書込み/読出しが正常に動作しています。\nリアルタイム同期機能を使えます。');
+    } else {
+      alert('⚠ レスポンスは返ったがデータが不正:\n' + JSON.stringify(got).substring(0,300));
+    }
+  }catch(e){
+    hideLoading();
+    alert(`✗ 同期テスト失敗:\n${e.message}\n\n確認:\n- Worker URLが正しいか\n- KV Namespace「ROUTES_KV」がバインドされているか\n- AUTH_TOKENがWorkerと一致しているか\n\n詳細は SYNC_SETUP_ARTGREEN.md 参照`);
+  }
 }
 
 function updateTabBadges(){
@@ -2464,7 +2786,9 @@ function saveSettings(){
     workerUrl: document.getElementById('workerUrl')?.value || '',
     mailFrom: document.getElementById('mailFrom')?.value || '',
     mailAuthToken: document.getElementById('mailAuthToken')?.value || '',
-    autoApprovalOnTime: document.getElementById('autoApprovalOnTime')?.checked || false
+    autoApprovalOnTime: document.getElementById('autoApprovalOnTime')?.checked || false,
+    syncEnabled: document.getElementById('syncEnabled')?.checked || false,
+    syncPollInterval: parseInt(document.getElementById('syncPollInterval')?.value) || 15
   };
   lsSet('settings', settings);
 }
@@ -2494,6 +2818,8 @@ function restoreSettings(){
   setVal('mailFrom', s.mailFrom);
   setVal('mailAuthToken', s.mailAuthToken);
   setChk('autoApprovalOnTime', s.autoApprovalOnTime);
+  setChk('syncEnabled', s.syncEnabled);
+  setVal('syncPollInterval', s.syncPollInterval || 15);
 }
 
 // 車両の保存/復元
@@ -2667,11 +2993,12 @@ async function clearAllSavedData(){
 function attachPersistenceHooks(){
   // 設定値変更時に保存
   ['apiKey','geocoder','depotPreset','depotAddress','departureTime','serviceTime',
-   'distanceMode','avgSpeed','qrBaseUrl','mailMode','mailBackend','workerUrl','gasUrl','mailFrom','mailAuthToken'].forEach(id=>{
+   'distanceMode','avgSpeed','qrBaseUrl','mailMode','mailBackend','workerUrl','gasUrl','mailFrom','mailAuthToken',
+   'syncPollInterval'].forEach(id=>{
     const el = document.getElementById(id);
     if(el) el.addEventListener('change', saveSettings);
   });
-  ['returnToDepot','strictTimeWindow','groupByWard','balanceVehicles'].forEach(id=>{
+  ['returnToDepot','strictTimeWindow','groupByWard','balanceVehicles','syncEnabled','autoApprovalOnTime'].forEach(id=>{
     const el = document.getElementById(id);
     if(el) el.addEventListener('change', saveSettings);
   });
@@ -2729,6 +3056,13 @@ window.addEventListener('DOMContentLoaded', async ()=>{
 
   // 朝7時以降なら画像送信対象を自動チェック
   setTimeout(()=>{ try{ autoCheckPhotoMails(); }catch(e){ console.warn(e); } }, 2000);
+
+  // ★ ページ読込時に同期ポーリング自動開始 (ドライバーモードでなければ)
+  if(typeof startSyncPolling === 'function' && !document.body.classList.contains('driver-mode')){
+    setTimeout(()=>{
+      try{ startSyncPolling(); }catch(e){ console.warn('同期ポーリング起動失敗:', e); }
+    }, 3000);
+  }
 });
 
 //============================================
@@ -2736,16 +3070,251 @@ window.addEventListener('DOMContentLoaded', async ()=>{
 //============================================
 let driverData = null; // {veh, dep, st[], date, ret}
 
+// ★ 同期機能のハードコード設定 (ゼロ設定でスマホが動くようにする)
+// ユーザー設定が空の場合のフォールバック値
+const DEFAULT_SYNC_WORKER_URL = 'https://artgreen-orchid-mailer.m-yamada0874.workers.dev';
+const DEFAULT_SYNC_ENABLED = true; // 既定で同期有効
+
+// ドライバー作業状態をlocalStorageに保存するためのキー (日付+車両名でルート単位)
+function getDriverStateKey(){
+  if(!driverData) return null;
+  return `driverState_${driverData.date}_${driverData.veh.n}`;
+}
+
+// ドライバー作業状態(status/signature/deliveredAt)をlocalStorage + (有効なら)KVに保存
+function saveDriverState(skipKVUpload){
+  const key = getDriverStateKey();
+  if(!key || !driverData) return;
+  try{
+    const state = {};
+    driverData.st.forEach(s => {
+      if(!s.w) return;
+      state[s.w] = {
+        status: s.status || 'pending',
+        signature: s.signature || null,
+        deliveredAt: s.deliveredAt || null
+      };
+    });
+    const payload = JSON.stringify({
+      saved: new Date().toISOString(),
+      vehicle: driverData.veh.n,
+      driver: driverData.veh.d || '',
+      date: driverData.date,
+      source: 'driver',
+      state
+    });
+    localStorage.setItem(key, JSON.stringify({saved: new Date().toISOString(), state}));
+    // 同期有効ならCloudflare KVにもバックグラウンドアップロード (PC→スマホ merge後の再送は不要)
+    if(!skipKVUpload){
+      uploadDriverStateToKV(key, payload).catch(e => {
+        console.warn('KV同期失敗(localStorageには保存済):', e.message);
+      });
+    }
+  }catch(e){
+    console.warn('ドライバー状態保存失敗:', e);
+  }
+}
+
+// Cloudflare KVに状態をアップロード (非同期)
+// 設定階層: DOM → localStorage → ハードコード値
+// ★ PCモード: lastResultsの該当routeをKVに同期 (PC↔スマホ双方向同期)
+async function savePCRouteState(stop){
+  if(!lastResults || !stop) return;
+  // stopが属するrouteを探す
+  const route = lastResults.results.routes.find(r => r.stops && r.stops.includes(stop));
+  if(!route) return;
+  // 配達日: stopのdeliveryDate or planDate
+  let date = stop.deliveryDate || (typeof getPlanDate === 'function' ? getPlanDate() : '');
+  if(!date){
+    const d = new Date();
+    date = `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+  }
+  // routeIdを構築 (スマホ側と同じ形式)
+  const routeId = `driverState_${date}_${route.vehicle.name}`;
+  // ルート全体の状態を集める (各webNoごと)
+  const state = {};
+  route.stops.forEach(s => {
+    if(!s.webNo) return;
+    state[s.webNo] = {
+      status: s.status || 'pending',
+      signature: s.signature || null,
+      deliveredAt: s.deliveredAt || null
+    };
+  });
+  const payload = JSON.stringify({
+    saved: new Date().toISOString(),
+    vehicle: route.vehicle.name,
+    driver: route.vehicle.driver || '',
+    date,
+    source: 'pc', // どこから来たか (デバッグ用)
+    state
+  });
+  try{
+    await uploadDriverStateToKV(routeId, payload);
+    console.log(`✓ PC→KV同期: ${routeId}`);
+  }catch(e){
+    console.warn('PC→KV同期失敗:', e.message);
+  }
+}
+
+async function uploadDriverStateToKV(routeId, payload){
+  let syncEnabled = document.getElementById('syncEnabled')?.checked;
+  let workerUrl = (document.getElementById('workerUrl')?.value||'').trim();
+  let authToken = (document.getElementById('mailAuthToken')?.value||'').trim();
+  // 階層1: localStorageフォールバック
+  try{
+    const s = JSON.parse(localStorage.getItem('settings')||'{}');
+    if(syncEnabled === undefined || syncEnabled === null) syncEnabled = s.syncEnabled;
+    if(!workerUrl) workerUrl = (s.workerUrl||'').trim();
+    if(!authToken) authToken = (s.mailAuthToken||'').trim();
+  }catch(e){}
+  // 階層2: ハードコード値(これでゼロ設定でも動く)
+  if(syncEnabled === undefined || syncEnabled === null) syncEnabled = DEFAULT_SYNC_ENABLED;
+  if(!workerUrl) workerUrl = DEFAULT_SYNC_WORKER_URL;
+  if(!syncEnabled || !workerUrl) return;
+  const url = `${workerUrl.replace(/\/$/,'')}/sync?routeId=${encodeURIComponent(routeId)}`;
+  const headers = {'Content-Type':'application/json'};
+  if(authToken) headers['X-Auth-Token'] = authToken;
+  try{
+    const res = await fetch(url, {method:'POST', headers, body: payload});
+    if(!res.ok){
+      const errText = await res.text();
+      console.error(`KV同期失敗: HTTP ${res.status} - ${errText.substring(0,200)}`);
+      throw new Error(`HTTP ${res.status}`);
+    }
+    console.log(`✓ KV同期成功: ${routeId}`);
+    if(document.body.classList.contains('driver-mode')){
+      showDriverToast('☁ 同期完了');
+    }
+  }catch(e){
+    console.error('KV同期 fetch エラー:', e);
+    throw e;
+  }
+}
+
+// localStorageから作業状態を復元してdriverData.stに適用
+function restoreDriverState(){
+  const key = getDriverStateKey();
+  if(!key || !driverData) return false;
+  try{
+    const raw = localStorage.getItem(key);
+    if(!raw) return false;
+    const {state} = JSON.parse(raw);
+    let restored = 0;
+    driverData.st.forEach(s => {
+      const saved = state[s.w];
+      if(saved){
+        s.status = saved.status || 'pending';
+        s.signature = saved.signature || null;
+        s.deliveredAt = saved.deliveredAt || null;
+        if(saved.status === 'delivered' || saved.status === 'absent') restored++;
+      }
+    });
+    if(restored > 0){
+      console.log(`✓ ${restored}件のドライバー作業状態を復元しました`);
+    }
+    return restored > 0;
+  }catch(e){
+    console.warn('ドライバー状態復元失敗:', e);
+    return false;
+  }
+}
+
+// QRが当日でない場合の配達員向けエラー画面 (ロック中の端末用)
+function showDriverQRExpiredScreen(qrDate, todayDate){
+  document.body.classList.remove('driver-mode');
+  document.body.innerHTML = `
+    <div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:30px;background:#fff3cd;color:#856404;text-align:center;font-family:'Hiragino Sans','Noto Sans JP','Yu Gothic',sans-serif;">
+      <div style="font-size:80px;margin-bottom:20px;">⚠️</div>
+      <h1 style="font-size:24px;font-weight:600;margin-bottom:16px;">このQRコードは使えません</h1>
+      <p style="font-size:16px;margin-bottom:24px;line-height:1.6;">
+        配達員モードでは <strong>当日のQRのみ</strong> 有効です。<br>
+        本日分のQRコードを事務所からお受け取りください。
+      </p>
+      <div style="background:#fff;padding:16px 24px;border-radius:8px;font-size:14px;margin-bottom:24px;box-shadow:0 2px 4px rgba(0,0,0,0.1);">
+        <div style="margin-bottom:8px;">📅 <strong>QRコードの配達日:</strong> ${escapeHtml(qrDate)}</div>
+        <div>📅 <strong>今日の日付:</strong> ${escapeHtml(todayDate)}</div>
+      </div>
+      <button onclick="window.location.hash='';window.location.reload();" style="background:#c87a26;color:#fff;border:none;padding:14px 32px;border-radius:8px;font-size:16px;font-weight:600;cursor:pointer;">
+        🔄 配達員ロック画面に戻る
+      </button>
+      <p style="font-size:12px;color:#a08054;margin-top:24px;">
+        事務所スタッフが新しい当日分QRを発行してください
+      </p>
+    </div>
+  `;
+}
+
+// ドライバーモード用シンプルトースト
+function showDriverToast(msg){
+  let toast = document.getElementById('driverToast');
+  if(!toast){
+    toast = document.createElement('div');
+    toast.id = 'driverToast';
+    toast.style.cssText = 'position:fixed;top:60px;left:50%;transform:translateX(-50%);background:rgba(0,150,80,0.95);color:#fff;padding:10px 20px;border-radius:6px;font-size:14px;font-weight:600;z-index:10000;box-shadow:0 4px 12px rgba(0,0,0,0.2);';
+    document.body.appendChild(toast);
+  }
+  toast.textContent = msg;
+  toast.style.display = 'block';
+  setTimeout(()=>{ if(toast) toast.style.display='none'; }, 4000);
+}
+
 function initDriverMode(){
   try{
     const compressed = window.location.hash.replace('#driver=','');
     const json = LZString.decompressFromEncodedURIComponent(compressed);
     if(!json) throw new Error('データ復元失敗');
     const raw = JSON.parse(json);
+    // QRから同期設定を自動適用 (QRに含まれていれば。なくてもDEFAULT_SYNC_WORKER_URLでフォールバック)
+    applyDriverSyncSettings(raw);
+    // 日付の正規化: YYYY/MM/DD形式に統一 (旧版QRはMM-DD or YYYY-MM-DDがあり得る)
+    let normalizedDate = raw.da || '';
+    if(/^\d{2}-\d{2}$/.test(normalizedDate)){
+      // "05-25" → "今年/05/25" に補完
+      normalizedDate = `${new Date().getFullYear()}/${normalizedDate.replace('-','/')}`;
+    } else if(/^\d{4}-\d{2}-\d{2}$/.test(normalizedDate)){
+      // "2026-05-25" → "2026/05/25"
+      normalizedDate = normalizedDate.replace(/-/g,'/');
+    }
+    // ★ QR当日限定チェック: 配達日が今日でない場合は警告
+    // 強化版: trim・正規化・タイムゾーン考慮
+    if(normalizedDate){
+      // 正規化: trim, 全角→半角スラッシュ
+      normalizedDate = String(normalizedDate).trim().replace(/-/g,'/').replace(/\//g,'/');
+      // 数字のpadding (例: 2026/6/3 → 2026/06/03)
+      const m = normalizedDate.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);
+      if(m){
+        normalizedDate = `${m[1]}/${String(m[2]).padStart(2,'0')}/${String(m[3]).padStart(2,'0')}`;
+      }
+      const today = (function(){
+        const d = new Date();
+        return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+      })();
+      console.log('QR当日チェック:', {QR配達日: normalizedDate, 今日: today, 一致: normalizedDate === today});
+      if(normalizedDate !== today){
+        // ロック中・管理者にかかわらず確認ダイアログで上書き可能
+        // (Strict拒否はバグ/誤認のリスクが高いため緩和)
+        const isLocked = (typeof isDriverLocked === 'function') ? isDriverLocked() : false;
+        const proceed = confirm(
+          `⚠ このQRコードは別の日付用です。\n\n` +
+          `📅 QRコードの配達日: ${normalizedDate}\n` +
+          `📅 今日の日付: ${today}\n\n` +
+          (isLocked ? '配達員モードロック中です。\n' : '') +
+          `続行しますか？\n\n` +
+          `[OK] 続行(警告を承知の上で)\n` +
+          `[キャンセル] アプリ通常画面に戻る`
+        );
+        if(!proceed){
+          window.location.hash = '';
+          window.location.reload();
+          return;
+        }
+      }
+    }
     // 短縮キー → 内部用キーに展開
     driverData = {
       veh: { n: raw.v, d: raw.d, c: raw.c },
-      date: raw.da,
+      date: normalizedDate,
       st: raw.s.map((x,i)=>({
         id: i,
         w: x.w, n: x.n, a: x.a,
@@ -2753,16 +3322,120 @@ function initDriverMode(){
         q: x.q, sz: x.sz||'', sn: x.sn||'', t: x.t||'',
         dd: x.dd||'',
         ph: x.ph||'', dp: x.dp||'', af: x.af||'', no: x.no||'',
-        cn: x.cn||'', ct: x.ct||'', sd: x.sd||'', st: x.st||'', sp: x.sp||'', ag: x.ag||'',
+        cn: x.cn||'', ct: x.ct||'', sd: x.sd||'', st: x.st||'', sp: x.sp||'', ag: x.ag||'', ao: x.ao||'',
         ar: x.ar,
         status: 'pending'
       }))
     };
     document.body.classList.add('driver-mode');
+    // localStorageに保存された作業状態(サイン・ステータス)があれば復元
+    const restored = restoreDriverState();
+    if(restored){
+      setTimeout(()=>{
+        showDriverToast('✓ 前回の作業状態を復元しました(サイン・ステータス)');
+      }, 500);
+    }
     renderDriverView();
+    // 配達員モードのKVポーリングは撤去 (シンプル化: スマホ→PC一方向のみ)
   }catch(e){
     alert('QRデータが破損しています: '+e.message);
     document.body.classList.remove('driver-mode');
+  }
+}
+
+//============================================
+// 配達員モード KVポーリング (PC→スマホ 同期取得)
+//============================================
+let driverSyncPollTimer = null;
+
+function startDriverSyncPolling(){
+  if(driverSyncPollTimer){ clearInterval(driverSyncPollTimer); }
+  // 初回 + 20秒ごと (スマホはバッテリー考慮で15秒より長め)
+  setTimeout(driverPollOnce, 1000);
+  driverSyncPollTimer = setInterval(driverPollOnce, 20000);
+}
+
+async function driverPollOnce(){
+  if(!driverData || !driverData.veh) return;
+  const routeId = `driverState_${driverData.date}_${driverData.veh.n}`;
+  // 階層フォールバック設定値取得
+  let workerUrl = (document.getElementById('workerUrl')?.value||'').trim();
+  let authToken = (document.getElementById('mailAuthToken')?.value||'').trim();
+  try{
+    const s = JSON.parse(localStorage.getItem('settings')||'{}');
+    if(!workerUrl) workerUrl = (s.workerUrl||'').trim();
+    if(!authToken) authToken = (s.mailAuthToken||'').trim();
+  }catch(e){}
+  if(!workerUrl) workerUrl = DEFAULT_SYNC_WORKER_URL;
+  if(!workerUrl) return;
+  try{
+    const url = `${workerUrl.replace(/\/$/,'')}/sync?routeId=${encodeURIComponent(routeId)}`;
+    const headers = {};
+    if(authToken) headers['X-Auth-Token'] = authToken;
+    const res = await fetch(url, {method:'GET', headers});
+    if(!res.ok) return;
+    const data = await res.json();
+    if(!data || !data.state) return;
+    // スマホ側のdriverDataにマージ (timestampで新しい方を採用)
+    let mergedCount = 0;
+    driverData.st.forEach(s => {
+      const remote = data.state[s.w];
+      if(!remote) return;
+      const remoteTime = remote.deliveredAt ? new Date(remote.deliveredAt).getTime() : 0;
+      const localTime = s.deliveredAt ? new Date(s.deliveredAt).getTime() : 0;
+      if(remoteTime > localTime){
+        s.status = remote.status || s.status;
+        s.signature = remote.signature || s.signature;
+        s.deliveredAt = remote.deliveredAt || s.deliveredAt;
+        mergedCount++;
+      }
+    });
+    if(mergedCount > 0){
+      console.log(`✓ スマホ受信: ${mergedCount}件の状態を同期`);
+      saveDriverState(true); // skipKVUpload=true (KVには再送しない)
+      renderDriverView();
+      showDriverToast(`☁ ${mergedCount}件の状態を受信`);
+    }
+  }catch(e){
+    console.warn('スマホポーリング失敗:', e.message);
+  }
+}
+
+// QRから受け取った同期設定をスマホのlocalStorageに自動適用
+function applyDriverSyncSettings(raw){
+  if(!raw) return;
+  // QRに同期設定が含まれていなければスキップ(後方互換)
+  if(raw.wu === undefined && raw.sy === undefined) return;
+  try{
+    const settings = JSON.parse(localStorage.getItem('settings') || '{}');
+    let changed = false;
+    if(raw.wu && settings.workerUrl !== raw.wu){
+      settings.workerUrl = raw.wu;
+      changed = true;
+    }
+    if(raw.at && settings.mailAuthToken !== raw.at){
+      settings.mailAuthToken = raw.at;
+      changed = true;
+    }
+    if(raw.sy && !settings.syncEnabled){
+      settings.syncEnabled = true;
+      changed = true;
+    }
+    if(changed){
+      localStorage.setItem('settings', JSON.stringify(settings));
+      // DOM要素にも反映(QRから来た直後はDOM未readyだが、念のため)
+      setTimeout(()=>{
+        const wuEl = document.getElementById('workerUrl');
+        const atEl = document.getElementById('mailAuthToken');
+        const syEl = document.getElementById('syncEnabled');
+        if(wuEl) wuEl.value = settings.workerUrl;
+        if(atEl) atEl.value = settings.mailAuthToken;
+        if(syEl) syEl.checked = settings.syncEnabled;
+      }, 100);
+      console.log('✓ QRから同期設定を自動適用しました');
+    }
+  }catch(e){
+    console.warn('同期設定の自動適用失敗:', e);
   }
 }
 
@@ -2868,33 +3541,27 @@ function openDriverReceipt(idx){
   const sdText = s.sd ? `<div class="info-row"><div class="label">依頼主部署</div><div class="value">${escapeHtml(s.sd)}</div></div>` : '';
   const stText = s.st ? `<div class="info-row"><div class="label">依頼主役職</div><div class="value">${escapeHtml(s.st)}</div></div>` : '';
   const spText = s.sp ? `<div class="info-row"><div class="label">依頼主氏名</div><div class="value">${escapeHtml(s.sp)} 様</div></div>` : '';
+  // ★ ドライバーモード: コンパクトな表示(WEB番号・お届け先・住所・商品・担当者のみ)
+  // ご担当者を住所と同行に配置してスクロール最小化
+  const compactContactName = s.cn ? `<span style="color:#666;font-size:11px;margin-left:6px;">${escapeHtml(s.cn)} 様</span>` : '';
+  const senderTxt = s.sn ? `<span style="color:#666;font-size:11px;">／ご依頼: ${escapeHtml(s.sn)}</span>` : '';
   document.getElementById('receiptPreview').innerHTML = `
-    <div class="receipt-title">受 領 書</div>
-    <div style="text-align:right;font-size:11px;color:var(--text-light);margin-bottom:6px;">${dateStr} 発行</div>
-    <div class="info-row"><div class="label">受注</div><div class="value">${s.ag?`<span style="background:#dfe7ff;color:#1e3a8a;padding:1px 8px;border-radius:3px;font-size:11px;margin-right:6px;">🏛 ${escapeHtml(s.ag)}</span>`:''}<span class="web-no">${escapeHtml(s.w||'-')}</span></div></div>
-    <div class="info-row"><div class="label">届け日</div><div class="value">${escapeHtml(s.dd||dateStr)}</div></div>
-    <div class="info-row"><div class="label">お届け先</div><div class="value"><strong>${escapeHtml(s.n)}</strong></div></div>
-    ${deptText}
-    ${ctTitleText}
-    ${cnText}
-    ${alsoForText}
-    <div class="info-row"><div class="label">住所</div><div class="value">${escapeHtml(s.a)}</div></div>
-    <div class="info-row"><div class="label">ご依頼主</div><div class="value">${escapeHtml(s.sn||'-')}</div></div>
-    ${sdText}
-    ${stText}
-    ${spText}
-    <div class="info-row"><div class="label">商品</div><div class="value">胡蝶蘭 ${s.q}鉢${sizeText}</div></div>
-    <div class="info-row"><div class="label">到着予定</div><div class="value">${s.ar}</div></div>
-    <div class="info-row"><div class="label">配達完了</div><div class="value"><strong>${completedText}</strong></div></div>
-    <div class="info-row"><div class="label">配達担当</div><div class="value">${escapeHtml(veh.n)}${veh.d?` / ${escapeHtml(veh.d)}`:''}</div></div>
-    <div class="info-row"><div class="label">ステータス</div><div class="value">${statusLabel}</div></div>
-    <div class="sign-area">
-      <div class="sign-label">上記の通り、確かに受領いたしました。</div>
-      <div class="sign-box" id="receiptSignBox">${sigHtml}</div>
+    <div style="display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid var(--primary);padding-bottom:4px;margin-bottom:8px;">
+      <div style="font-size:18px;font-weight:700;color:var(--primary);">受 領 書</div>
+      <div style="font-size:11px;color:var(--text-light);">${dateStr}</div>
     </div>
+    <div style="background:#eef5f1;color:var(--primary);padding:6px 10px;border-radius:4px;font-family:monospace;font-size:14px;font-weight:600;margin-bottom:6px;text-align:center;">${escapeHtml(s.w||'-')}</div>
+    ${s.ao?`<div style="background:#fef5e7;color:#8b6e3a;padding:4px 10px;border-radius:3px;font-family:monospace;font-size:12px;margin-bottom:6px;text-align:center;">代理店注文番号: <strong>${escapeHtml(s.ao)}</strong></div>`:''}
+    ${s.ag?`<div style="background:#dfe7ff;color:#1e3a8a;padding:2px 8px;border-radius:3px;font-size:11px;margin-bottom:6px;display:inline-block;">🏛 ${escapeHtml(s.ag)}</div>`:''}
+    <div style="font-size:16px;font-weight:600;margin-bottom:2px;">${escapeHtml(s.n)}${compactContactName}</div>
+    <div style="font-size:12px;color:var(--text-light);margin-bottom:6px;">📍 ${escapeHtml(s.a)}</div>
+    <div style="font-size:13px;margin-bottom:6px;">📦 胡蝶蘭 ${s.q}鉢${sizeText} ${senderTxt}</div>
+    <div style="font-size:11px;color:var(--text-light);border-top:1px dashed #ddd;padding-top:4px;">完了: <strong style="color:var(--text);">${completedText}</strong> ／ ${escapeHtml(veh.n)}${veh.d?` ${escapeHtml(veh.d)}`:''}</div>
   `;
   updateStatusButtons(s.status||'delivered');
   initCompletedTimeInputs(s);
+  // ドライバーモード: サイン取得可
+  applyReceiptSignPolicy(true);
   setupSigPad();
   clearSig();
   if(s.signature){
@@ -3123,6 +3790,7 @@ function ingestRows(rows){
   // 列名マッピング（優先順 + 部分一致 + avoid除外）
   const colMap = {
     webNo:          { patterns:['w03注文番号_ワイズカート','WEB番号','Web番号','ＷＥＢ番号','注文番号_ワイズカート','受注番号','オーダー番号','管理番号','伝票番号','注文番号'], avoid:['代理店','シップ'] },
+    agencyOrderNo:  { patterns:['代理店注文番号','取引先注文番号','取引先伝票番号','取引先オーダー番号','代理店オーダー番号','代理店伝票番号','f_代理店注文番号'], avoid:[] },
     agency:         { patterns:['d_代理店名_略称','代理店名_略称','代理店マスタ_代理店コード::代理店名','代理店名','取引先名','代理店'], avoid:['担当者','コード','FAX','TEL','番号','備考','フラグ'] },
     agencyCode:     { patterns:['w_代理店コード','代理店マスタ_代理店コード','^代理店コード$','代理店コード','取引先コード'], avoid:['代理店名','::','FAX','TEL','備考','注文番号'] },
     name:           { patterns:['w31お届け先_会社名','お届け先_会社名','宅配伝票用会社名','お届け先名','届け先名','店舗名','店名','配送先名','配送先','宛先','顧客名'], avoid:['住所','郵便','電話','フリガナ','宛名','部署','連名','フラグ','お名前'] },
@@ -3287,6 +3955,7 @@ function ingestRows(rows){
       photoTiming, // 'pre' | 'today'
       shipDate,
       webNo,
+      agencyOrderNo: String(detectValue(r,colMap.agencyOrderNo)).trim(),
       agency: String(detectValue(r,colMap.agency)).trim(),
       agencyCode: String(detectValue(r,colMap.agencyCode)).trim(),
       name: String(detectValue(r,colMap.name)).trim() || '(名称未設定)',
@@ -3500,7 +4169,7 @@ function renderDataPreview(){
     html += `<tr ${d.deliveryType==='carrier'?'style="background:#f5f9fc;"':''}>
       <td>${i+1}${typeBadge}</td>
       <td style="font-size:11px;">${escapeHtml(d.agency||'-')}</td>
-      <td style="font-family:monospace;font-size:11px;">${escapeHtml(d.webNo||'-')}${d.trackingNumber?`<br><span style="background:${getCarrierColor(d.carrier)};color:#fff;padding:0 4px;border-radius:2px;font-size:9px;">🏷${escapeHtml(d.trackingNumber)}</span>`:''}</td>
+      <td style="font-family:monospace;font-size:11px;">${escapeHtml(d.webNo||'-')}${d.agencyOrderNo?`<br><span style="background:#fef5e7;color:#8b6e3a;padding:0 4px;border-radius:2px;font-size:9px;">📋${escapeHtml(d.agencyOrderNo)}</span>`:''}${d.trackingNumber?`<br><span style="background:${getCarrierColor(d.carrier)};color:#fff;padding:0 4px;border-radius:2px;font-size:9px;">🏷${escapeHtml(d.trackingNumber)}</span>`:''}</td>
       <td style="font-size:11px;white-space:nowrap;">${escapeHtml(d.deliveryDate||'-')}</td>
       <td>${escapeHtml(d.name)}</td>
       <td>${escapeHtml(d.sender||'-')}</td>
@@ -4685,6 +5354,8 @@ function openReceiptModalForCarrier(stopId){
   renderReceiptPreview(stop, fakeRoute, 0);
   updateStatusButtons(stop.status || 'delivered');
   initCompletedTimeInputs(stop);
+  // 宅配受領書もPC(管理者)からはサイン不可
+  applyReceiptSignPolicy(false);
   setupSigPad();
   clearSig();
   if(stop.signature){
@@ -5240,7 +5911,12 @@ function updateSelection(){
 function buildSubjectPrefix(stop){
   const agencyLabel = (stop.agency || stop.agencyCode || '').trim();
   const web = (stop.webNo || '').trim();
+  const ao = (stop.agencyOrderNo || '').trim();
+  // 優先: 代理店名_代理店注文番号 (代理店マスタ側から見やすい)
+  // 代理店注文番号がなければ WEB番号で代替
+  if(agencyLabel && ao) return `${agencyLabel}_${ao}`;
   if(agencyLabel && web) return `${agencyLabel}_${web}`;
+  if(ao) return ao;
   if(web) return web;
   if(agencyLabel) return agencyLabel;
   return '-';
@@ -5264,7 +5940,7 @@ function buildEmailTemplate(stop, route){
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   WEB番号:    ${stop.webNo || '-'}
-  届け日:      ${stop.deliveryDate || todayDateStr()}
+${stop.agencyOrderNo ? '  代理店注文番号: ' + stop.agencyOrderNo + '\n' : ''}  届け日:      ${stop.deliveryDate || todayDateStr()}
   お届け先:    ${stop.name}${contactText ? ' / ' + contactText : ''}
   住所:        ${stop.address}
 ${stop.alsoFor ? '  様分書き:    ' + stop.alsoFor + '\n' : ''}${senderText ? '  ご依頼主:    ' + senderText + '\n' : ''}  商品:        胡蝶蘭 ${stop.qty}鉢${stop.size ? '(' + stop.size + ')' : ''}
@@ -5467,7 +6143,8 @@ async function generateReceiptPDFForStop(stop){
   tempPreview.innerHTML = `
     <div style="font-size:18px;font-weight:700;text-align:center;margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid #2c5f4f;">受 領 書</div>
     <div style="text-align:right;font-size:11px;color:#999;margin-bottom:6px;">${dateStr} 発行</div>
-    <div style="display:flex;padding:5px 0;border-bottom:1px dashed #eee;font-size:12px;"><div style="min-width:80px;color:#666;">受注</div><div style="flex:1;">${stop.agency?`<span style="background:#dfe7ff;color:#1e3a8a;padding:1px 8px;border-radius:3px;font-size:11px;margin-right:6px;">🏛 ${stop.agencyCode?escapeHtml(stop.agencyCode)+' ':''}${escapeHtml(stop.agency)}</span>`:''}<span style="font-family:monospace;background:#eef5f1;color:#2c5f4f;padding:2px 8px;border-radius:3px;">${escapeHtml(stop.webNo||'-')}</span></div></div>
+    <div style="display:flex;padding:5px 0;border-bottom:1px dashed #eee;font-size:12px;"><div style="min-width:80px;color:#666;">WEB番号</div><div style="flex:1;">${stop.agency?`<span style="background:#dfe7ff;color:#1e3a8a;padding:1px 8px;border-radius:3px;font-size:11px;margin-right:6px;">🏛 ${stop.agencyCode?escapeHtml(stop.agencyCode)+' ':''}${escapeHtml(stop.agency)}</span>`:''}<span style="font-family:monospace;background:#eef5f1;color:#2c5f4f;padding:2px 8px;border-radius:3px;">${escapeHtml(stop.webNo||'-')}</span></div></div>
+    ${stop.agencyOrderNo ? `<div style="display:flex;padding:5px 0;border-bottom:1px dashed #eee;font-size:12px;"><div style="min-width:80px;color:#666;">代理店注文番号</div><div style="flex:1;"><span style="font-family:monospace;background:#fef5e7;color:#8b6e3a;padding:2px 8px;border-radius:3px;">${escapeHtml(stop.agencyOrderNo)}</span></div></div>` : ''}
     <div style="display:flex;padding:5px 0;border-bottom:1px dashed #eee;font-size:12px;"><div style="min-width:80px;color:#666;">届け日</div><div style="flex:1;">${escapeHtml(stop.deliveryDate||dateStr)}</div></div>
     <div style="display:flex;padding:5px 0;border-bottom:1px dashed #eee;font-size:12px;"><div style="min-width:80px;color:#666;">お届け先</div><div style="flex:1;"><strong>${escapeHtml(stop.name)}</strong></div></div>
     ${deptRow}${contactTitleRow}${contactNameRow}${alsoForRow}
@@ -5652,7 +6329,7 @@ ${isCarrier ? `本日出荷いたしました胡蝶蘭の商品画像をお送�
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   WEB番号:    ${stop.webNo || '-'}
-  ${isCarrier?'出荷日':'届け日'}:      ${(isCarrier ? (stop.shipDate||stop.deliveryDate) : stop.deliveryDate) || todayDateStr()}
+${stop.agencyOrderNo ? '  代理店注文番号: ' + stop.agencyOrderNo + '\n' : ''}  ${isCarrier?'出荷日':'届け日'}:      ${(isCarrier ? (stop.shipDate||stop.deliveryDate) : stop.deliveryDate) || todayDateStr()}
   お届け先:    ${stop.name}${contactText ? ' / ' + contactText : ''}
   住所:        ${stop.address}
 ${stop.alsoFor ? '  様分書き:    ' + stop.alsoFor + '\n' : ''}${senderText ? '  ご依頼主:    ' + senderText + '\n' : ''}  商品:        胡蝶蘭 ${stop.qty}鉢${stop.size ? '(' + stop.size + ')' : ''}
@@ -6823,7 +7500,10 @@ function openReceiptModal(vi, si){
   updateStatusButtons(stop.status || 'delivered');
   initCompletedTimeInputs(stop);
 
-  // サイン復元
+  // PC(管理者)モードはサイン不可・閲覧専用 (配達員端末でのみサイン取得)
+  applyReceiptSignPolicy(false);
+
+  // サイン復元 (既にサイン済みなら閲覧表示)
   setupSigPad();
   clearSig();
   if(stop.signature){
@@ -6837,6 +7517,131 @@ function openReceiptModal(vi, si){
   }
 
   document.getElementById('receiptModal').classList.add('show');
+}
+
+// 受領書PDFを取得 (保存済みファイル優先・なければ新規生成)
+async function fetchReceiptPDFBlob(stop){
+  const webNo = String(stop.webNo || stop.w || '');
+  if(!webNo) return null;
+  // 1. 保存済みPDFを探す
+  if(receiptFolderHandle){
+    try{
+      const subDir = await receiptFolderHandle.getDirectoryHandle(webNo);
+      const fileHandle = await subDir.getFileHandle(`${webNo}.pdf`);
+      const file = await fileHandle.getFile();
+      console.log(`📄 保存済PDFを使用: ${webNo}.pdf (${(file.size/1024).toFixed(1)}KB)`);
+      return file;
+    }catch(e){
+      // 見つからなければ新規生成
+      if(e.name !== 'NotFoundError') console.warn('PDF読込失敗:', e);
+    }
+  }
+  // 2. 新規生成
+  try{
+    const base64 = await generateReceiptPDFForStop(stop);
+    if(!base64) return null;
+    const binStr = atob(base64);
+    const bytes = new Uint8Array(binStr.length);
+    for(let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+    return new Blob([bytes], {type: 'application/pdf'});
+  }catch(e){
+    console.error('PDF生成失敗:', e);
+    return null;
+  }
+}
+
+// 受領書PDFを新タブで開く
+async function openSavedReceiptPDF(){
+  if(!currentReceiptStop){ alert('対象なし'); return; }
+  showLoading('PDFを準備中...');
+  const blob = await fetchReceiptPDFBlob(currentReceiptStop);
+  hideLoading();
+  if(!blob){ alert('PDFを取得できませんでした'); return; }
+  const url = URL.createObjectURL(blob);
+  const win = window.open(url, '_blank');
+  if(!win){
+    // ポップアップブロックされた場合、aタグでフォールバック
+    const a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.click();
+  }
+  setTimeout(()=>URL.revokeObjectURL(url), 60000);
+}
+
+// 受領書PDFをダウンロード
+async function downloadReceiptPDF(){
+  if(!currentReceiptStop){ alert('対象なし'); return; }
+  showLoading('PDFを準備中...');
+  const blob = await fetchReceiptPDFBlob(currentReceiptStop);
+  hideLoading();
+  if(!blob){ alert('PDFを取得できませんでした'); return; }
+  const webNo = String(currentReceiptStop.webNo || currentReceiptStop.w || 'receipt');
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${webNo}_受領書.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 5000);
+}
+
+// サイン取得の許可制御 (PC・スマホ両方で「✍ サインを貰う」ボタン表示)
+// canSign引数はレガシー互換のため残しているが、現状はどちらでもサイン可能
+function applyReceiptSignPolicy(canSign){
+  const sigSection = document.getElementById('sigPadSection');
+  if(!sigSection) return;
+  const canvas = document.getElementById('sigCanvas');
+  const openBtn = document.getElementById('openSignSubModalBtn');
+  let infoBox = document.getElementById('sigPolicyInfo');
+  const stop = currentReceiptStop;
+  const hasSignature = stop && stop.signature && stop.signature.length > 200;
+  const isDriverMode = document.body.classList.contains('driver-mode');
+
+  sigSection.style.display = '';
+  // ✍ サインを貰うボタンは常に表示 (PC・スマホ両方)
+  if(openBtn){
+    openBtn.style.display = 'block';
+    openBtn.textContent = hasSignature ? '✍ サインを再取得' : '✍ サインを貰う';
+  }
+  // キャンバスは「サイン済」確認用に表示、ペンは無効
+  if(canvas){
+    canvas.style.display = hasSignature ? 'block' : 'none';
+    canvas.style.pointerEvents = 'none';
+    canvas.style.border = hasSignature ? '2px solid var(--success)' : 'none';
+  }
+  const label = sigSection.querySelector('label');
+  if(label){
+    label.textContent = hasSignature ? '✓ サイン取得済 (確認のみ・再取得は「サインを貰う」)' : '';
+    label.style.display = hasSignature ? 'block' : 'none';
+  }
+  const ctrl = sigSection.querySelector('.sig-pad-controls');
+  if(ctrl) ctrl.style.display = 'none';
+  // 案内ボックス
+  if(!infoBox){
+    infoBox = document.createElement('div');
+    infoBox.id = 'sigPolicyInfo';
+    infoBox.style.cssText = 'margin:8px 0 12px;padding:10px 12px;font-size:12px;border-radius:3px;';
+    sigSection.parentElement.insertBefore(infoBox, sigSection);
+  }
+  if(hasSignature){
+    // サイン取得済み + PDFボタン表示
+    const sigTime = stop.deliveredAt ? new Date(stop.deliveredAt).toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '時刻不明';
+    const sourceLabel = isDriverMode ? '🚚 この端末で取得' : '📱 配達員のスマホ等で取得 (同期済み)';
+    infoBox.style.display = 'block';
+    infoBox.style.background = '#e7f7ee';
+    infoBox.style.borderLeft = '3px solid var(--success)';
+    infoBox.style.color = '#1d6a3f';
+    infoBox.innerHTML = `${sourceLabel}<br>受領時刻: ${escapeHtml(sigTime)}
+      <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">
+        <button onclick="openSavedReceiptPDF()" style="background:var(--primary);color:#fff;border:none;padding:8px 14px;border-radius:4px;font-size:12px;cursor:pointer;font-weight:600;">📄 受領書PDFを開く</button>
+        <button onclick="downloadReceiptPDF()" style="background:#fff;color:var(--primary);border:1.5px solid var(--primary);padding:8px 14px;border-radius:4px;font-size:12px;cursor:pointer;font-weight:600;">⬇ PDFをダウンロード</button>
+      </div>`;
+  } else {
+    // サインまだなし → 案内非表示(ボタンだけで分かる)
+    infoBox.style.display = 'none';
+  }
 }
 
 function closeReceiptModal(){
@@ -6871,7 +7676,8 @@ function renderReceiptPreview(stop, route, si){
   document.getElementById('receiptPreview').innerHTML = `
     <div class="receipt-title">受 領 書</div>
     <div style="text-align:right;font-size:11px;color:var(--text-light);margin-bottom:6px;">${dateStr} 発行</div>
-    <div class="info-row"><div class="label">受注</div><div class="value">${stop.agency?`<span style="background:#dfe7ff;color:#1e3a8a;padding:1px 8px;border-radius:3px;font-size:11px;margin-right:6px;">🏛 ${escapeHtml(stop.agency)}</span>`:''}<span class="web-no">${escapeHtml(stop.webNo||'-')}</span></div></div>
+    <div class="info-row"><div class="label">WEB番号</div><div class="value">${stop.agency?`<span style="background:#dfe7ff;color:#1e3a8a;padding:1px 8px;border-radius:3px;font-size:11px;margin-right:6px;">🏛 ${escapeHtml(stop.agency)}</span>`:''}<span class="web-no">${escapeHtml(stop.webNo||'-')}</span></div></div>
+    ${stop.agencyOrderNo ? `<div class="info-row"><div class="label">代理店注文番号</div><div class="value"><span style="font-family:monospace;background:#fef5e7;color:#8b6e3a;padding:2px 8px;border-radius:3px;">${escapeHtml(stop.agencyOrderNo)}</span></div></div>` : ''}
     <div class="info-row"><div class="label">届け日</div><div class="value">${escapeHtml(stop.deliveryDate||dateStr)}</div></div>
     <div class="info-row"><div class="label">お届け先</div><div class="value"><strong>${escapeHtml(stop.name)}</strong></div></div>
     ${deptText}
@@ -6975,15 +7781,18 @@ function setStatus(status){
 //============================================
 function setupSigPad(){
   const canvas = document.getElementById('sigCanvas');
+  // ★ ドライバーモード時は高さを1.5倍 (240px) に
+  const isDriverMode = document.body.classList.contains('driver-mode');
+  const targetHeight = isDriverMode ? 240 : 160;
   // CSS幅に合わせて実描画サイズを調整
   const ratio = window.devicePixelRatio || 1;
   const w = canvas.offsetWidth || 480;
   canvas.width = w * ratio;
-  canvas.height = 160 * ratio;
-  canvas.style.height = '160px';
+  canvas.height = targetHeight * ratio;
+  canvas.style.height = targetHeight + 'px';
   sigCtx = canvas.getContext('2d');
   sigCtx.scale(ratio, ratio);
-  sigCtx.lineWidth = 2;
+  sigCtx.lineWidth = isDriverMode ? 3 : 2; // ドライバーモードは太め
   sigCtx.lineCap = 'round';
   sigCtx.lineJoin = 'round';
   sigCtx.strokeStyle = '#1a1a1a';
@@ -7000,6 +7809,140 @@ function setupSigPad(){
     canvas.addEventListener('touchmove', sigMove, {passive:false});
     canvas.addEventListener('touchend', sigEnd);
   }
+}
+
+//============================================
+// ✍ サインサブモーダル (ドライバーモード専用)
+//============================================
+let subSigCtx = null;
+let subSigDrawing = false;
+let subSigHasContent = false;
+let subSigLastX = 0, subSigLastY = 0;
+
+function openSignSubModal(){
+  if(!currentReceiptStop) return;
+  // 情報表示
+  const infoEl = document.getElementById('signSubInfo');
+  if(infoEl){
+    const s = currentReceiptStop;
+    const name = s.name || s.n || '';
+    const web = s.webNo || s.w || '';
+    infoEl.innerHTML = `📦 ${escapeHtml(name)} <span style="font-family:monospace;font-size:11px;margin-left:6px;">(${escapeHtml(web)})</span>`;
+  }
+  setupSubSigPad();
+  clearSubSig();
+  document.getElementById('signSubModal').classList.add('show');
+}
+
+function closeSignSubModal(){
+  document.getElementById('signSubModal').classList.remove('show');
+}
+
+function setupSubSigPad(){
+  const canvas = document.getElementById('signSubCanvas');
+  const ratio = window.devicePixelRatio || 1;
+  const w = canvas.offsetWidth || 560;
+  const h = 280;
+  canvas.width = w * ratio;
+  canvas.height = h * ratio;
+  canvas.style.height = h + 'px';
+  subSigCtx = canvas.getContext('2d');
+  subSigCtx.scale(ratio, ratio);
+  subSigCtx.lineWidth = 3;
+  subSigCtx.lineCap = 'round';
+  subSigCtx.lineJoin = 'round';
+  subSigCtx.strokeStyle = '#1a1a1a';
+  if(!canvas._subSigBound){
+    canvas._subSigBound = true;
+    canvas.addEventListener('mousedown', subSigStart);
+    canvas.addEventListener('mousemove', subSigMove);
+    canvas.addEventListener('mouseup', subSigEnd);
+    canvas.addEventListener('mouseleave', subSigEnd);
+    canvas.addEventListener('touchstart', subSigStart, {passive:false});
+    canvas.addEventListener('touchmove', subSigMove, {passive:false});
+    canvas.addEventListener('touchend', subSigEnd);
+  }
+}
+
+function subSigGetPos(e){
+  const canvas = document.getElementById('signSubCanvas');
+  const rect = canvas.getBoundingClientRect();
+  let x, y;
+  if(e.touches && e.touches[0]){
+    x = e.touches[0].clientX - rect.left;
+    y = e.touches[0].clientY - rect.top;
+  } else {
+    x = e.clientX - rect.left;
+    y = e.clientY - rect.top;
+  }
+  return {x, y};
+}
+
+function subSigStart(e){
+  e.preventDefault?.();
+  subSigDrawing = true;
+  const {x, y} = subSigGetPos(e);
+  subSigLastX = x; subSigLastY = y;
+}
+
+function subSigMove(e){
+  if(!subSigDrawing) return;
+  e.preventDefault?.();
+  const {x, y} = subSigGetPos(e);
+  subSigCtx.beginPath();
+  subSigCtx.moveTo(subSigLastX, subSigLastY);
+  subSigCtx.lineTo(x, y);
+  subSigCtx.stroke();
+  subSigLastX = x; subSigLastY = y;
+  subSigHasContent = true;
+}
+
+function subSigEnd(e){
+  if(subSigDrawing){ e.preventDefault?.(); }
+  subSigDrawing = false;
+}
+
+function clearSubSig(){
+  const canvas = document.getElementById('signSubCanvas');
+  if(subSigCtx) subSigCtx.clearRect(0, 0, canvas.width, canvas.height);
+  subSigHasContent = false;
+}
+
+// 親saveReceiptで再度confirm出さないためのフラグ
+let _skipSignConfirm = false;
+
+// サインサブモーダルから「保存」: サイン + 受領書を一気に確定
+async function saveSubSigAndReceipt(){
+  if(!subSigHasContent){
+    if(!confirm('サインがありません。このまま受領完了として保存しますか？')) return;
+  }
+  if(!currentReceiptStop){
+    alert('対象が見つかりません');
+    return;
+  }
+  // サインデータをcurrentReceiptStopに反映
+  if(subSigHasContent){
+    currentReceiptStop.signature = document.getElementById('signSubCanvas').toDataURL('image/png');
+    sigHasContent = true; // 親モーダルのsaveReceiptが認識するように
+    // 親モーダルのsigCanvasにも反映(視覚的に)
+    const mainCanvas = document.getElementById('sigCanvas');
+    if(mainCanvas && sigCtx){
+      const img = new Image();
+      img.onload = ()=>{
+        sigCtx.drawImage(img, 0, 0, mainCanvas.width, mainCanvas.height);
+      };
+      img.src = currentReceiptStop.signature;
+    }
+  }
+  // ステータスを delivered に
+  currentReceiptStop.status = 'delivered';
+  // 親saveReceiptの確認ダイアログを抑制(既にこちらで確認済み)
+  _skipSignConfirm = true;
+  // サブモーダルを閉じる
+  closeSignSubModal();
+  // 親のsaveReceiptを呼び出して受領書確定
+  await saveReceipt();
+  _skipSignConfirm = false;
 }
 
 function sigGetPos(e){
@@ -7068,7 +8011,11 @@ async function saveReceipt(){
     return;
   }
   if(status==='delivered' && !sigHasContent){
-    if(!confirm('サインがありません。このまま保存しますか？')){ return; }
+    // ドライバーモードのみ警告 (PCはサイン不可なのでスルー)
+    // _skipSignConfirm が真ならサブモーダルで既に確認済みなのでスキップ
+    if(isDriverMode && !_skipSignConfirm){
+      if(!confirm('サインがありません。このまま保存しますか？')){ return; }
+    }
   }
 
   if(sigHasContent){
@@ -7093,32 +8040,56 @@ async function saveReceipt(){
 
   const btn = document.getElementById('saveReceiptBtn');
   btn.disabled = true; btn.textContent = 'PDF生成中...';
+  // ドライバーモード: PDF生成/保存より先にlocalStorage+KVに保存(失敗してもサインは残る)
+  if(isDriverMode){
+    saveDriverState();
+  }
+  // ★ 管理者モード: ステータス・サインをIndexedDBに即時永続化
+  // (PC→KV同期は撤去・スマホ→PC一方向同期のみ維持)
+  if(!isDriverMode){
+    saveStateIDB().catch(e => console.warn('IndexedDB保存失敗:', e));
+  }
+  let pdfError = null;
   try{
     const pdfBlob = await generateReceiptPDF();
     await saveReceiptFile(stop, pdfBlob);
-    // 学習データを履歴フォルダにも自動保存 (失敗しても受領書保存は続行)
     if(!isDriverMode){
       saveHistory(true).then(ok => {
-        if(ok) console.log('履歴を更新しました');
+        if(ok) console.log('履歴フォルダを更新しました');
       });
     }
-    // 時間指定通り配達なら自動メール送信(承認BOXスキップ)
     if(!isDriverMode) await tryAutoSendOnSave(stop);
-    btn.textContent = '✓ 保存しました';
+  }catch(err){
+    console.error('PDF保存エラー:', err);
+    pdfError = err;
+  }
+  // ドライバーモードは PDFエラーでも閉じる(サインはKVに保存済み)
+  if(isDriverMode){
+    btn.textContent = pdfError ? '✓ サイン保存(PDFは後で)' : '✓ 保存しました';
     setTimeout(()=>{
       btn.disabled = false; btn.textContent = '💾 保存';
       closeReceiptModal();
-      if(isDriverMode){
-        renderDriverView();
+      renderDriverView();
+      if(pdfError){
+        showDriverToast(`⚠ サインは保存しましたがPDF出力に失敗しました(後で再発行可能)`);
       } else {
-        renderResults(lastResults);
+        showDriverToast('✓ 配達完了を保存しました');
       }
-    }, 700);
-  }catch(err){
-    console.error(err);
-    alert('保存に失敗しました: '+err.message);
-    btn.disabled = false; btn.textContent = '💾 保存';
+    }, 600);
+    return;
   }
+  // 管理者モード: 従来動作
+  if(pdfError){
+    alert('保存に失敗しました: '+pdfError.message);
+    btn.disabled = false; btn.textContent = '💾 保存';
+    return;
+  }
+  btn.textContent = '✓ 保存しました';
+  setTimeout(()=>{
+    btn.disabled = false; btn.textContent = '💾 保存';
+    closeReceiptModal();
+    renderResults(lastResults);
+  }, 700);
 }
 
 // ドライバーモード用 saveReceiptFile拡張: webNoを参照する代わりに stop.webNo または stop.w を使う
@@ -7157,11 +8128,23 @@ function buildDriverPayload(vi){
   // QRサイズを抑えるため、極めて短いキー名・最小フィールドのみ
   // 緯度経度は小数点4桁まで(精度約11m、十分)
   const r4 = n => Math.round(n*10000)/10000;
+  // 配達日: ルートの最頻配達日(または計画タブの選択日)を YYYY/MM/DD で
+  let deliveryDate = '';
+  try{
+    deliveryDate = (typeof getPlanDate === 'function') ? getPlanDate() : '';
+  }catch(e){}
+  if(!deliveryDate){
+    deliveryDate = (route.stops[0]?.deliveryDate) || (function(){
+      const d = new Date();
+      return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+    })();
+  }
+  // QRデータは最小限に(同期設定はDEFAULT_SYNC_WORKER_URLで自動)
   const payload = {
     v: route.vehicle.name,
     d: route.vehicle.driver||'',
     c: route.vehicle.color,
-    da: new Date().toISOString().slice(5,10), // 05-25 形式
+    da: deliveryDate, // YYYY/MM/DD形式
     s: route.stops.map((s,i)=>{
       const o = {
         w: s.webNo||'',
@@ -7185,6 +8168,7 @@ function buildDriverPayload(vi){
       if(s.senderTitle) o.st = s.senderTitle;
       if(s.senderPerson) o.sp = s.senderPerson;
       if(s.agency) o.ag = s.agency;
+      if(s.agencyOrderNo) o.ao = s.agencyOrderNo;
       return o;
     })
   };
@@ -7882,15 +8866,15 @@ async function loadSampleData(region){
   region = region || 'tokyo';
   // 届け日はすべて6/1で統一
   const year = new Date().getFullYear();
-  const datePool = [`${year}/06/01`];
+  const datePool = [`${year}/06/04`];
 
   // 画像対象(hasPhoto): true=商品撮影画像あり/お客様に画像送信対象
   // 自社配送: 8件中 5件にhasPhoto / 宅配: 3件中 2件にhasPhoto (Tokyo)
   const samplesTokyo = [
     // 自社配送 (12件: hasPhoto=true 7件, false 5件)
-    {webNo:'2026052500001', name:'銀座花亭', sender:'株式会社グリーン商事', address:'東京都中央区銀座4-6-16', qty:2, size:'3本立', timeRaw:'09:00-12:00', hasPhoto:true, photoTiming:'pre'},
-    {webNo:'2026052500002', name:'丸の内オフィス受付', sender:'山田太郎', address:'東京都千代田区丸の内2-4-1', qty:1, size:'5本立', timeRaw:'10:00-11:00', hasPhoto:false},
-    {webNo:'2026052500003', name:'六本木ヒルズフラワー', sender:'株式会社アクメ', address:'東京都港区六本木6-10-1', qty:3, size:'3本立', timeRaw:'13:00-15:00', hasPhoto:true, photoTiming:'pre'},
+    {webNo:'2026052500001', agencyOrderNo:'AGT-20260604-001', name:'銀座花亭', sender:'株式会社グリーン商事', address:'東京都中央区銀座4-6-16', qty:2, size:'3本立', timeRaw:'09:00-12:00', hasPhoto:true, photoTiming:'pre'},
+    {webNo:'2026052500002', agencyOrderNo:'AGT-20260604-002', name:'丸の内オフィス受付', sender:'山田太郎', address:'東京都千代田区丸の内2-4-1', qty:1, size:'5本立', timeRaw:'10:00-11:00', hasPhoto:false},
+    {webNo:'2026052500003', agencyOrderNo:'AGT-20260604-003', name:'六本木ヒルズフラワー', sender:'株式会社アクメ', address:'東京都港区六本木6-10-1', qty:3, size:'3本立', timeRaw:'13:00-15:00', hasPhoto:true, photoTiming:'pre'},
     {webNo:'2026052500004', name:'渋谷スカイラウンジ', sender:'佐藤花子', address:'東京都渋谷区渋谷2-24-12', qty:1, size:'大輪', timeRaw:'14:00-17:00', hasPhoto:true},
     {webNo:'2026052500005', name:'新宿パークタワー', sender:'有限会社サクラ', address:'東京都新宿区西新宿3-7-1', qty:2, size:'3本立', timeRaw:'10:00-13:00', hasPhoto:false},
     {webNo:'2026052500006', name:'品川インターシティ', sender:'田中商店', address:'東京都港区港南2-15-1', qty:1, size:'5本立', timeRaw:'09:00-11:00', hasPhoto:true},
@@ -7965,6 +8949,7 @@ async function loadSampleData(region){
     deliveryData.push({
       id:i,
       webNo:s.webNo,
+      agencyOrderNo: s.agencyOrderNo || '',
       deliveryDate,
       shipDate,
       hasPhoto: s.hasPhoto === true, // 明示的フラグから取得
@@ -8006,15 +8991,15 @@ async function loadSampleData(region){
   alert(
     `✓ サンプルデータ${samples.length}件を読み込みました (${regionLabel}エリア)\n`+
     `\n【配送区分】\n`+
-    `  ・自社配送: ${selfCount}件 (届け日 2026/06/01)\n`+
-    `  ・宅配出荷: ${carrierCount}件 (出荷日 ${shipDateSample} → 届け日 2026/06/01)\n`+
+    `  ・自社配送: ${selfCount}件 (届け日 2026/06/04)\n`+
+    `  ・宅配出荷: ${carrierCount}件 (出荷日 ${shipDateSample} → 届け日 2026/06/04)\n`+
     `\n【画像送信対象 (📸 撮影画像あり)】\n`+
     `  ・合計: ${photoTotal}件 / ${samples.length}件\n`+
     `    - 自社配送のうち画像あり: ${photoSelfCount}件 (届け日当日 朝7時送信予定)\n`+
     `    - 宅配のうち画像あり: ${photoCarrierCount}件 (出荷日当日 朝7時送信予定)\n`+
     `\n出発拠点も自動切替済。\n`+
     `📋「配達を組む」タブで「🚚 ルート最適化を実行」を押してください。\n`+
-    `🚚 自社配達タブの日付ピッカーで 2026-06-01 を選ぶと自社配送先が表示されます。\n`+
+    `🚚 自社配達タブの日付ピッカーで 2026-06-04 を選ぶと自社配送先が表示されます。\n`+
     `📨 画像送信タブで日付を切り替えると、自社=届け日 / 宅配=出荷日 で対象を確認できます。`
   );
 }
